@@ -129,6 +129,21 @@ class BinaryOpNode(ASTNode):
     def __init__(self, token: Token):
         super().__init__(token)
 
+    @staticmethod
+    def numeric_binop(builder, left, right, op_float, op_int, op_name):
+        # Disallow string operands
+        if ASTNode.is_string_value(left) or ASTNode.is_string_value(right):
+            raise CodeGenError(f"Cannot {op_name} string values")
+        # Promote to float if needed
+        if left.type == ir.FloatType() or right.type == ir.FloatType():
+            left = builder.sitofp(left, ir.FloatType()) if left.type != ir.FloatType() else left
+            right = builder.sitofp(right, ir.FloatType()) if right.type != ir.FloatType() else right
+            return op_float(left, right)
+        # Require matching types
+        if left.type != right.type:
+            raise CodeGenError(f"Type mismatch in {op_name}: {left.type} vs {right.type}")
+        return op_int(left, right)
+
     def codegen(self, builder, module, symbol_table):
         infix_op = self.token.type
         left = self.children[0].codegen(builder, module, symbol_table)
@@ -141,45 +156,13 @@ class BinaryOpNode(ASTNode):
                 left_ptr = builder.bitcast(left, ir.PointerType(ir.IntType(8)))
                 right_ptr = builder.bitcast(right, ir.PointerType(ir.IntType(8)))
                 return builder.call(func, [left_ptr, right_ptr])
-            if left.type == ir.FloatType() or right.type == ir.FloatType():
-                # Convert int to float if one side is float with other being int
-                left = builder.sitofp(left, ir.FloatType()) if left.type != ir.FloatType() else left
-                right = builder.sitofp(right, ir.FloatType()) if right.type != ir.FloatType() else right
-                return builder.fadd(left, right)
-            return builder.add(left, right)
+            return self.numeric_binop(builder, left, right, builder.fadd, builder.add, "add")
         elif infix_op == TokenType.MINUS:
-            if self.is_string_value(left) or self.is_string_value(right):
-                raise CodeGenError("Cannot subtract string values")
-            elif left.type == ir.FloatType() or right.type == ir.FloatType():
-                # Convert int to float if one side is float with other being int
-                left = builder.sitofp(left, ir.FloatType()) if left.type != ir.FloatType() else left
-                right = builder.sitofp(right, ir.FloatType()) if right.type != ir.FloatType() else right
-                return builder.fsub(left, right)
-            elif left.type != right.type:
-                raise CodeGenError(f"Type mismatch in subtraction: {left.type} vs {right.type}")
-            return builder.sub(left, right)
+            return self.numeric_binop(builder, left, right, builder.fsub, builder.sub, "subtract")
         elif infix_op == TokenType.SLASH:
-            if self.is_string_value(left) or self.is_string_value(right):
-                raise CodeGenError("Cannot divide string values")
-            elif left.type == ir.FloatType() or right.type == ir.FloatType():
-                # Convert int to float if one side is float with other being int
-                left = builder.sitofp(left, ir.FloatType()) if left.type != ir.FloatType() else left
-                right = builder.sitofp(right, ir.FloatType()) if right.type != ir.FloatType() else right
-                return builder.fdiv(left, right)
-            elif left.type != right.type:
-                raise CodeGenError(f"Type mismatch in division: {left.type} vs {right.type}")
-            return builder.sdiv(left, right)
+            return self.numeric_binop(builder, left, right, builder.fdiv, builder.sdiv, "divide")
         elif infix_op == TokenType.STAR:
-            if self.is_string_value(left) or self.is_string_value(right):
-                raise CodeGenError("Cannot multiply string values")
-            elif left.type == ir.FloatType() or right.type == ir.FloatType():
-                # Convert int to float if one side is float with other being int
-                left = builder.sitofp(left, ir.FloatType()) if left.type != ir.FloatType() else left
-                right = builder.sitofp(right, ir.FloatType()) if right.type != ir.FloatType() else right
-                return builder.fmul(left, right)
-            elif left.type != right.type:
-                raise CodeGenError(f"Type mismatch in multiplication: {left.type} vs {right.type}")
-            return builder.mul(left, right)
+            return self.numeric_binop(builder, left, right, builder.fmul, builder.mul, "multiply")
         elif infix_op == TokenType.AND:
             return builder.and_(left, right)
         elif infix_op == TokenType.OR:
