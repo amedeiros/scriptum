@@ -25,6 +25,15 @@ class ASTNode(ABC):
     def codegen(self, builder: IRBuilder, module: Module, symbol_table: dict[str, ir.Value]):
         pass
 
+    @staticmethod
+    def is_string_value(val):
+        t = val.type
+        return (
+            isinstance(t, ir.PointerType) and
+            isinstance(t.pointee, ir.ArrayType) and
+            t.pointee.element == ir.IntType(8)
+        )
+
 class NumberNode(ASTNode):
     def __init__(self, token: Token):
         super().__init__(token)
@@ -104,7 +113,6 @@ class FunctionCallNode(ASTNode):
                     if isinstance(expected_type, ir.PointerType) and expected_type.pointee == ir.IntType(8):
                         val = builder.bitcast(val, expected_type)
             args.append(val)
-        # _args = [arg.codegen(builder, module, symbol_table) for arg in self.children]
         return builder.call(func, args)
 
 class BlockNode(ASTNode):
@@ -126,12 +134,10 @@ class BinaryOpNode(ASTNode):
         left = self.children[0].codegen(builder, module, symbol_table)
         right = self.children[1].codegen(builder, module, symbol_table)
         if infix_op == TokenType.PLUS:
-            # String concatination
-            if (isinstance(left.type, ir.types.PointerType) and
-                isinstance(left.type.pointee, ir.types.ArrayType)) or \
-                (isinstance(right.type, ir.types.PointerType) and
-                isinstance(right.type.pointee, ir.types.ArrayType)):
+            # String concatenation
+            if (self.is_string_value(left) and self.is_string_value(right)):
                 func = symbol_table.get("strcat")
+                # Get pointers to the string data
                 left_ptr = builder.bitcast(left, ir.PointerType(ir.IntType(8)))
                 right_ptr = builder.bitcast(right, ir.PointerType(ir.IntType(8)))
                 return builder.call(func, [left_ptr, right_ptr])
@@ -142,16 +148,58 @@ class BinaryOpNode(ASTNode):
                 return builder.fadd(left, right)
             return builder.add(left, right)
         elif infix_op == TokenType.MINUS:
+            if self.is_string_value(left) or self.is_string_value(right):
+                raise CodeGenError("Cannot subtract string values")
+            elif left.type == ir.FloatType() or right.type == ir.FloatType():
+                # Convert int to float if one side is float with other being int
+                left = builder.sitofp(left, ir.FloatType()) if left.type != ir.FloatType() else left
+                right = builder.sitofp(right, ir.FloatType()) if right.type != ir.FloatType() else right
+                return builder.fsub(left, right)
+            elif left.type != right.type:
+                raise CodeGenError(f"Type mismatch in subtraction: {left.type} vs {right.type}")
             return builder.sub(left, right)
         elif infix_op == TokenType.SLASH:
-            if left.type == ir.FloatType() or right.type == ir.FloatType():
+            if self.is_string_value(left) or self.is_string_value(right):
+                raise CodeGenError("Cannot divide string values")
+            elif left.type == ir.FloatType() or right.type == ir.FloatType():
                 # Convert int to float if one side is float with other being int
                 left = builder.sitofp(left, ir.FloatType()) if left.type != ir.FloatType() else left
                 right = builder.sitofp(right, ir.FloatType()) if right.type != ir.FloatType() else right
                 return builder.fdiv(left, right)
+            elif left.type != right.type:
+                raise CodeGenError(f"Type mismatch in division: {left.type} vs {right.type}")
             return builder.sdiv(left, right)
         elif infix_op == TokenType.STAR:
+            if self.is_string_value(left) or self.is_string_value(right):
+                raise CodeGenError("Cannot multiply string values")
+            elif left.type == ir.FloatType() or right.type == ir.FloatType():
+                # Convert int to float if one side is float with other being int
+                left = builder.sitofp(left, ir.FloatType()) if left.type != ir.FloatType() else left
+                right = builder.sitofp(right, ir.FloatType()) if right.type != ir.FloatType() else right
+                return builder.fmul(left, right)
+            elif left.type != right.type:
+                raise CodeGenError(f"Type mismatch in multiplication: {left.type} vs {right.type}")
             return builder.mul(left, right)
+        elif infix_op == TokenType.AND:
+            return builder.and_(left, right)
+        elif infix_op == TokenType.OR:
+            return builder.or_(left, right)
+        elif infix_op in (TokenType.EQUAL, TokenType.NOT_EQ, TokenType.LT_EQ, TokenType.LT, TokenType.GT_EQ, TokenType.GT):
+            op = self.token.value
+            if self.is_string_value(left) and self.is_string_value(right):
+                func = symbol_table.get("strcmp")
+                left_ptr = builder.bitcast(left, ir.PointerType(ir.IntType(8)))
+                right_ptr = builder.bitcast(right, ir.PointerType(ir.IntType(8)))
+                truthy =  builder.call(func, [left_ptr, right_ptr])
+                return builder.icmp_signed(op, truthy, ir.Constant(ir.IntType(32), 0))
+            elif left.type == ir.FloatType() or right.type == ir.FloatType():
+                # Convert int to float if one side is float with other being int
+                left = builder.sitofp(left, ir.FloatType()) if left.type != ir.FloatType() else left
+                right = builder.sitofp(right, ir.FloatType()) if right.type != ir.FloatType() else right
+                return builder.fcmp_ordered(op, left, right)
+            elif left.type != right.type:
+                raise CodeGenError(f"Type mismatch in comparison: {left.type} vs {right.type}")
+            return builder.icmp_signed(op, left, right)
         raise CodeGenError(f"Unknown infix operator {infix_op}")
 
 class ReturnNode(ASTNode):

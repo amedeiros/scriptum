@@ -7,16 +7,20 @@ class ParseError(Exception):
 
 # Precedence
 LOWEST  = 0
-EQUALS  = 1
-LT_GT   = 2
-SUM     = 3
-PRODUCT = 4
-PREFIX  = 5
-CALL    = 6
+OR      = 1
+AND     = 2
+EQUALS  = 3
+LT_GT   = 4
+SUM     = 5
+PRODUCT = 6
+PREFIX  = 7
+CALL    = 8
 
 PRECEDENCES = {}
 PRECEDENCES[TokenType.EQUAL]    = EQUALS
 PRECEDENCES[TokenType.NOT_EQ]   = EQUALS
+PRECEDENCES[TokenType.AND]      = AND
+PRECEDENCES[TokenType.OR]       = OR
 PRECEDENCES[TokenType.LT]       = LT_GT
 PRECEDENCES[TokenType.LT_EQ]    = LT_GT
 PRECEDENCES[TokenType.GT]       = LT_GT
@@ -52,6 +56,8 @@ class Parser:
         # self._register_prefix(TokenType.FUNCTION, self._parse_function_expression)
 
     def _load_infix_parse_funcs(self) -> None:
+        self._register_infix(TokenType.AND, self._parse_infix_expression)
+        self._register_infix(TokenType.OR, self._parse_infix_expression)
         self._register_infix(TokenType.PLUS, self._parse_infix_expression)
         self._register_infix(TokenType.MINUS, self._parse_infix_expression)
         self._register_infix(TokenType.SLASH, self._parse_infix_expression)
