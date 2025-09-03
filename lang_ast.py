@@ -298,6 +298,11 @@ class FunctionNode(ASTNode):
         for node in self.children[1:]:
             node.codegen(func_builder, module, scoped_table)
 
+        # If no explicit return is found, provide a default return value
+        if not func_builder.block.is_terminated:
+            default_boxed = ASTNode.box_int(func_builder, ir.Constant(ir.IntType(32), 0))
+            func_builder.ret(default_boxed)
+
         return func
 
 class FunctionCallNode(ASTNode):

@@ -44,3 +44,12 @@ let add = -> (x, y) {
 }
 printf("Results of Add: %d\n", add(10, 10))
 
+let no_return = -> (x, y) {
+  printf("NO RETURN X: %d Y: %d\n", x, y)
+}
+no_return(10, 20)
+
+# let nested_add = -> (v, x, y) {
+#   return v(x, y)
+# }
+# nexted_add(add, 20, 10)
