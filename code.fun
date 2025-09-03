@@ -36,3 +36,11 @@ printf("%.2f\n", 10 + 1.01)
 printf("%d\n", 10 + 100)
 printf("%d\n", 100 / 10)
 printf("%.2f\n", 100 / 10.0)
+
+let add = -> (x, y) {
+  printf("X: %d\n", x)
+  printf("Y: %d\n", y)
+  return x + y
+}
+printf("Results of Add: %d\n", add(10, 10))
+

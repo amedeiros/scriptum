@@ -2,6 +2,7 @@
 from llvmlite import binding, ir
 from lexer import Lexer
 from parser import Parser
+from lang_ast import SymbolTable
 import lang_builtins as builtins
 
 CODE = open("code.fun").read()
@@ -26,7 +27,7 @@ def build_module(code=CODE):
     # print_ast(ast)
     module = ir.Module(name="my_module")
     builder = ir.IRBuilder()
-    symbol_table = {}
+    symbol_table = SymbolTable()
     # Declare built-in functions
     builtins.declare_builtins(module, symbol_table)
 

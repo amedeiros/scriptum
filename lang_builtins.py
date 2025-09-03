@@ -1,6 +1,8 @@
 # type: ignore
 from llvmlite import ir
 
+NATIVE_FUNCS = {"printf", "puts", "strcat", "strcmp"}
+
 # Begin built-in printing functions
 def declare_printf(module, symbol_table):
     printf_ty = ir.FunctionType(ir.IntType(32), [ir.PointerType(ir.IntType(8))], var_arg=True)

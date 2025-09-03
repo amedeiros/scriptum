@@ -53,7 +53,7 @@ class Parser:
         self._register_prefix(TokenType.BANG, self._parse_prefix_expression)
         self._register_prefix(TokenType.IF, self._parse_if_expression)
         self._register_prefix(TokenType.LPAREN, self._parse_grouped_expression)
-        # self._register_prefix(TokenType.FUNCTION, self._parse_function_expression)
+        self._register_prefix(TokenType.FUNCTION, self._parse_function_literal)
 
     def _load_infix_parse_funcs(self) -> None:
         self._register_infix(TokenType.AND, self._parse_infix_expression)
@@ -119,6 +119,29 @@ class Parser:
             self._consume(TokenType.ELSE)
             expression.add_child(self._parse_block_statement())
         return expression
+    
+    def _parse_function_literal(self) -> FunctionNode:
+        function = FunctionNode(self.current_token)
+        self._consume(TokenType.FUNCTION)
+        if self._consume(TokenType.LPAREN):
+            function.children.append(self._parse_function_params())
+        
+        function.children.append(self._parse_block_statement())
+        return function
+    
+    def _parse_function_params(self) -> list:
+        identifiers = []
+        if self._check(TokenType.RPAREN):
+            self._advance()
+            return identifiers
+        while not self._check(TokenType.RPAREN) and not self._is_eof():
+                ident = self._parse_identifier()
+                if ident:
+                    identifiers.append(ident)
+                if not self._check(TokenType.RPAREN):
+                    self._consume(TokenType.COMMA)
+        self._consume(TokenType.RPAREN)
+        return identifiers
 
     def _parse_block_statement(self) -> BlockNode:
         block = BlockNode(self.current_token)
@@ -142,6 +165,9 @@ class Parser:
         let.children.append(self._parse_identifier())
         self._consume(TokenType.ASSIGN)
         let.children.append(self._parse_expression(LOWEST))
+        # Check for function definition and assign the identifier name to the function name
+        if isinstance(let.children[len(let.children)-1], FunctionNode):
+            let.children[len(let.children)-1].name = let.children[0].token.value
 
         return let
     
