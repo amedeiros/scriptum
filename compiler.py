@@ -29,7 +29,7 @@ def build_module(code=CODE):
     builder = ir.IRBuilder()
     symbol_table = SymbolTable()
     # Declare built-in functions
-    builtins.declare_builtins(module, symbol_table)
+    builtins.declare_builtins(module, symbol_table, builder)
 
     func_type = ir.FunctionType(ir.VoidType(), [])
     main_func = ir.Function(module, func_type, name="main")
