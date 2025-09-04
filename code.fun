@@ -80,7 +80,14 @@ scoping_test()
 printf("Outside the scope! X: %s\n", x)
 
 # Functions as params
-# let nested_add = -> (v, x, y) {
-#   return v(x, y)
-# }
-# nexted_add(add, 20, 10)
+let call = -> (func, x, y) {
+    return func(x, y)
+}
+printf("%d\n", call(add, 2, 3))
+
+
+let test_func_call = -> (func, x, y) {
+  let results = func(x, y)
+  printf("Results: %d\n", results)
+}
+test_func_call(add, 20, 30)

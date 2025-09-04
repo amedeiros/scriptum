@@ -53,6 +53,7 @@ class ASTNode(ABC):
     def __init__(self, token: Token):
         self.token = token
         self.children = []
+        self.type = ir.PointerType(value_struct_ty) # Default type is box type.
 
     def add_child(self, child: "ASTNode"):
         self.children.append(child)
@@ -172,6 +173,10 @@ class IdentifierNode(ASTNode):
         if var_addr is None:
             raise CodeGenError(f"Undefined variable: {self.token.value}")
         
+        # If function return
+        if isinstance(var_addr, ir.Function):
+            return var_addr
+
         # Handle unboxing types
         if self.is_boxed_value(var_addr):
             return self.unbox(var_addr, builder, symbol_table)
@@ -193,9 +198,8 @@ class FunctionNode(ASTNode):
     def codegen(self, builder, module, symbol_table):
         scoped_table = SymbolTable(parent=symbol_table)
         args = self.children[0]
-        arg_count = len(args)
         arg_names = [arg.token.value for arg in args]
-        arg_types = [ir.PointerType(value_struct_ty)] * arg_count
+        arg_types = [arg.type for arg in args]
         func_type = ir.FunctionType(ir.PointerType(value_struct_ty), arg_types)
         func = ir.Function(module, func_type, name=self.name)
         block = func.append_basic_block(name="entry")
@@ -235,7 +239,9 @@ class FunctionCallNode(ASTNode):
             val = arg.codegen(builder, module, symbol_table)
             expected_type = param_types[i] if i < len(param_types) else None
             # Handle boxing/unboxing based on expected parameter type
-            if self.token.value in NATIVE_FUNCS and self.is_boxed_value(val):
+            if isinstance(val, ir.Function):
+                pass
+            elif self.token.value in NATIVE_FUNCS and self.is_boxed_value(val):
                 val = self.unbox(val, builder, symbol_table)
             elif self.token.value not in NATIVE_FUNCS and not self.is_boxed_value(val):
                 val = self.box(val, builder)
@@ -407,10 +413,6 @@ class LetNode(ASTNode):
         else: # infix operations and IDENTIFIER token
             var_addr = builder.alloca(value.type, name=identifier_node.token.value)
             builder.store(value, var_addr)
-
-        # # Default initialization for boxed type if value is None and var_addr is a boxed pointer
-        # if value is None and hasattr(var_addr.type, 'pointee') and var_addr.type.pointee == value_struct_ty:
-        #     ASTNode.box_int(builder, ir.Constant(ir.IntType(32), 0))
 
         symbol_table[identifier_node.token.value] = var_addr
         return var_addr

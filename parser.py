@@ -287,42 +287,9 @@ class Parser:
 def print_ast(ast: list[ASTNode], level=0):
     indent = "  " * level
     for node in ast:
-        print(f"{indent}{node.__class__.__name__}: {node.token.value}")
+        print(f"{indent}{node.__class__.__name__}: {node.token.value} ({node.type.__class__.__name__})")
         for child in node.children:
-            print_ast([child], level + 1)
-
-if __name__ == "__main__":
-    code = '''
-let total = 1 + 1
-let x = "apples"
-let one = 1
-let floating = 10.019
-let truth = true
-let falsity = false
-let apples = floating
-# return apples
-if (truth) {
-  printf("TRUE!!!")
-} else {
-  printf("FALSE!!!")
-}
-'''
-    lexer = Lexer(code)
-    parser = Parser(lexer)
-    ast = parser.parse()
-    print_ast(ast)
-    from llvmlite import ir
-    module = ir.Module(name="my_module")
-    builder = ir.IRBuilder()
-    symbol_table = {}
-    # Declare built-in functions
-    import lang_builtins as builtins
-    builtins.declare_printf(module, symbol_table)
-
-    func_type = ir.FunctionType(ir.VoidType(), [])
-    main_func = ir.Function(module, func_type, name="main")
-    block = main_func.append_basic_block(name="entry")
-    builder = ir.IRBuilder(block)
-    for node in ast:
-        node.codegen(builder, module, symbol_table)
-    print(module)
+            if isinstance(child, list):
+                print_ast(child, level + 1)
+            else:
+                print_ast([child], level + 1)
