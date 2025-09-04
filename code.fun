@@ -87,7 +87,7 @@ printf("%d\n", call(add, 2, 3))
 
 
 let test_func_call = -> (func, x, y) {
-  let results = func(x, y)
-  printf("Results: %d\n", results)
+  let results = func(x, y) + 1
+  printf("Results Expect 51: %d\n", results)
 }
 test_func_call(add, 20, 30)

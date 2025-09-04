@@ -57,6 +57,11 @@ def analyze_let(node, symbol_table, func_arg = None):
     elif isinstance(rhs, FunctionCallNode):
         if func_arg and rhs.token.value == func_arg.token.value:
             func_arg.type = ir.PointerType(ir.FunctionType(ir.PointerType(value_struct_ty), [child.type for child in rhs.children]))
+    elif isinstance(rhs, BinaryOpNode):
+        for child in rhs.children:
+            if isinstance(child, FunctionCallNode):
+                if func_arg and child.token.value == func_arg.token.value:
+                    func_arg.type = ir.PointerType(ir.FunctionType(ir.PointerType(value_struct_ty), [child.type for child in child.children]))
     else:
         type = TOKEN_TO_TYPE.get(rhs.token.type)
         if type:
