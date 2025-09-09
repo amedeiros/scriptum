@@ -38,8 +38,13 @@ def declare_malloc(module, symbol_table):
     malloc = ir.Function(module, malloc_ty, name="malloc")
     symbol_table["malloc"] = malloc
 
+def declare_exit(module, symbol_table):
+    exit_ty = ir.FunctionType(ir.VoidType(), [ir.IntType(32)])
+    exit_fn = ir.Function(module, exit_ty, name="exit")
+    symbol_table["exit"] = exit_fn
+
 def declare_unbox(module, symbol_table, builder):
-    fn_name = "unbox_value"
+    fn_name = "unbox"
     fn_ty = ir.FunctionType(ir.IntType(32), [ir.PointerType(value_struct_ty)])
     fn = ir.Function(module, fn_ty, name=fn_name)
     entry = fn.append_basic_block("entry")
@@ -93,6 +98,15 @@ def declare_unbox(module, symbol_table, builder):
     builder.position_at_start(trap_block)
     trap_ty = ir.FunctionType(ir.VoidType(), [])
     trap_fn = module.declare_intrinsic('llvm.trap', (), trap_ty)
+    # Print a message
+    msg_bytes = b"unbox: type mismatch %d\n\0"
+    msg_type = ir.ArrayType(ir.IntType(8), len(msg_bytes))
+    msg_global = ir.GlobalVariable(module, msg_type, name="unbox_type_mismatch_msg")
+    msg_global.initializer = ir.Constant(msg_type, list(msg_bytes))
+    msg_global.global_constant = True
+    msg_ptr = builder.gep(msg_global, [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), 0)])
+    builder.call(symbol_table["printf"], [msg_ptr, type_tag])
+    # Call their trap function
     builder.call(trap_fn, [])
     builder.ret(ir.Constant(ir.IntType(32), 0))
     symbol_table[fn_name] = fn
@@ -106,3 +120,4 @@ def declare_builtins(module, symbol_table, builder):
     declare_strcpy(module, symbol_table)
     declare_malloc(module, symbol_table)
     declare_unbox(module, symbol_table, builder)
+    declare_exit(module, symbol_table)

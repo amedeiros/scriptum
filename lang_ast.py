@@ -6,7 +6,7 @@ from llvmlite.ir.builder import IRBuilder
 from llvmlite.ir.module import Module
 
 # We don't box/unbox with these.
-NATIVE_FUNCS = {"printf", "puts", "strcmp", "strlen", "strcpy", "malloc", "strcat"}
+NATIVE_FUNCS = {"printf", "puts", "strcmp", "strlen", "strcpy", "malloc", "strcat", "exit"}
 
 # Box type
 value_struct_ty = ir.LiteralStructType([
@@ -79,22 +79,22 @@ class ASTNode(ABC):
     def box(val, builder):
         # Box based on value type
         if isinstance(val.type, ir.IntType) and val.type.width == 32:
-            return ASTNode.box_int(builder, val)
+            return ASTNode.box_int(val, builder)
         elif isinstance(val.type, ir.FloatType):
-            return ASTNode.box_float(builder, val)
+            return ASTNode.box_float(val, builder)
         elif isinstance(val.type, ir.IntType) and val.type.width == 1:
-            return ASTNode.box_bool(builder, val)
+            return ASTNode.box_bool(val, builder)
 
         raise CodeGenError(f"Cannot box value {val}")
-    
-    @staticmethod
-    def unbox(boxed, builder, symbol_table):
-            # Use a builtin unbox function for all boxed values
-            unbox_fn =  symbol_table.get("unbox_value")
-            return builder.call(unbox_fn, [boxed])
 
     @staticmethod
-    def box_int(builder, value):
+    def unbox(boxed, builder, symbol_table):
+        # Use a builtin unbox function for all boxed values
+        unbox_fn = symbol_table.get("unbox")
+        return builder.call(unbox_fn, [boxed])
+
+    @staticmethod
+    def box_int(value, builder):
         boxed = builder.alloca(value_struct_ty)
         # Store type tag
         type_ptr = builder.gep(boxed, [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), 0)])
@@ -106,7 +106,7 @@ class ASTNode(ABC):
         return boxed
     
     @staticmethod
-    def box_float(builder, value):
+    def box_float(value, builder):
         boxed = builder.alloca(value_struct_ty)
         # Store type tag
         type_ptr = builder.gep(boxed, [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), 0)])
@@ -118,7 +118,7 @@ class ASTNode(ABC):
         return boxed
 
     @staticmethod
-    def box_bool(builder, value):
+    def box_bool(value, builder):
         boxed = builder.alloca(value_struct_ty)
         # Store type tag
         type_ptr = builder.gep(boxed, [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), 0)])
@@ -146,7 +146,7 @@ class StringNode(ASTNode):
         super().__init__(token)
 
     def codegen(self, builder, module, symbol_table):
-        str_bytes = bytearray(self.token.value.encode("utf8")) + b"\00"  # null-terminated
+        str_bytes = bytearray(self.token.value.encode("utf8")) + b"\00"
         str_type = ir.ArrayType(ir.IntType(8), len(str_bytes))
         local_str = builder.alloca(str_type)
         # Store each byte (could use a loop or memcpy for efficiency)
@@ -178,8 +178,8 @@ class IdentifierNode(ASTNode):
             return var_addr
 
         # Handle unboxing types
-        if self.is_boxed_value(var_addr):
-            return self.unbox(var_addr, builder, symbol_table)
+        if ASTNode.is_boxed_value(var_addr):
+            return ASTNode.unbox(var_addr, builder, symbol_table)
 
         # If the variable is a string return its pointer
         # TODO: Handle other data types requiring a pointer
@@ -209,18 +209,14 @@ class FunctionNode(ASTNode):
         for i, arg in enumerate(func.args):
             arg.name = arg_names[i]
             scoped_table[arg.name] = arg
-            # Default initialization for boxed parameters
-            if arg.type.pointee == value_struct_ty:
-                ASTNode.box_int(func_builder, ir.Constant(ir.IntType(32), 0))
 
         # Codegen the function body.
-        # Ignore return since ReturnNode will handle the return type.
         for node in self.children[1:]:
             node.codegen(func_builder, module, scoped_table)
 
         # If no explicit return is found, provide a default return value
         if not func_builder.block.is_terminated:
-            default_boxed = ASTNode.box_int(func_builder, ir.Constant(ir.IntType(32), 0))
+            default_boxed = ASTNode.box(ir.Constant(ir.IntType(32), 0), func_builder)
             func_builder.ret(default_boxed)
 
         return func
@@ -234,21 +230,20 @@ class FunctionCallNode(ASTNode):
         if func is None:
             raise CodeGenError(f"Undefined function: {self.token.value}")
         args = []
-        param_types = func.function_type.args
-        for i, arg in enumerate(self.children):
+        for arg in self.children:
             val = arg.codegen(builder, module, symbol_table)
-            expected_type = param_types[i] if i < len(param_types) else None
-            # Handle boxing/unboxing based on expected parameter type
+            # Handle boxing/unboxing
             if isinstance(val, ir.Function):
                 pass
-            elif self.token.value in NATIVE_FUNCS and self.is_boxed_value(val):
-                val = self.unbox(val, builder, symbol_table)
-            elif self.token.value not in NATIVE_FUNCS and not self.is_boxed_value(val):
-                val = self.box(val, builder)
-            elif expected_type and val.type != expected_type:
-                # Example: cast [N x i8]* to i8*
-                if isinstance(expected_type, ir.PointerType) and expected_type.pointee == ir.IntType(8):
-                    val = builder.bitcast(val, expected_type)
+            elif self.token.value in NATIVE_FUNCS and ASTNode.is_boxed_value(val):
+                val = ASTNode.unbox(val, builder, symbol_table)
+            elif self.token.value not in NATIVE_FUNCS and not ASTNode.is_boxed_value(val):
+                val = ASTNode.box(val, builder)
+            elif ASTNode.is_string_value(val):
+                val = builder.bitcast(val, ir.PointerType(ir.IntType(8)))
+
+            if not isinstance(val.type, ir.PointerType) and self.token.value not in NATIVE_FUNCS:
+                raise CodeGenError("Expected pointer type for non-native function")
             args.append(val)
         return builder.call(func, args)
 
@@ -293,12 +288,7 @@ class BinaryOpNode(ASTNode):
 
         if infix_op == TokenType.PLUS:
             # String concatenation
-            if (self.is_string_value(left) and self.is_string_value(right)):
-                # strcpy_func = symbol_table.get("strcpy")
-                # left_ptr = builder.bitcast(left, ir.PointerType(ir.IntType(8)))
-                # right_ptr = builder.bitcast(right, ir.PointerType(ir.IntType(8)))
-                # return builder.call(strcpy_func, [ASTNode.box(left_ptr), ASTNode.box(right_ptr)])
-
+            if (ASTNode.is_string_value(left) and ASTNode.is_string_value(right)):
                 strlen_func = symbol_table.get("strlen")
                 strcpy_func = symbol_table.get("strcpy")
                 strcat_func = symbol_table.get("strcat")
@@ -322,12 +312,20 @@ class BinaryOpNode(ASTNode):
         elif infix_op == TokenType.STAR:
             return self.numeric_binop(builder, left, right, builder.fmul, builder.mul, "multiply")
         elif infix_op == TokenType.AND:
+            if left.type != ir.IntType(1):
+                left = builder.trunc(left, ir.IntType(1))
+            if right.type != ir.IntType(1):
+                right = builder.trunc(right, ir.IntType(1))
             return builder.and_(left, right)
         elif infix_op == TokenType.OR:
+            if left.type != ir.IntType(1):
+                left = builder.trunc(left, ir.IntType(1))
+            if right.type != ir.IntType(1):
+                right = builder.trunc(right, ir.IntType(1))
             return builder.or_(left, right)
         elif infix_op in (TokenType.EQUAL, TokenType.NOT_EQ, TokenType.LT_EQ, TokenType.LT, TokenType.GT_EQ, TokenType.GT):
             op = self.token.value
-            if self.is_string_value(left) and self.is_string_value(right):
+            if ASTNode.is_string_value(left) and ASTNode.is_string_value(right):
                 func = symbol_table.get("strcmp")
                 left_ptr = builder.bitcast(left, ir.PointerType(ir.IntType(8)))
                 right_ptr = builder.bitcast(right, ir.PointerType(ir.IntType(8)))
@@ -348,8 +346,10 @@ class ReturnNode(ASTNode):
         super().__init__(token)
 
     def codegen(self, builder, module, symbol_table):
-        if not self.children:
-            builder.ret(ir.Constant(ir.PointerType(value_struct_ty), None))
+        # Handle empty return
+        if len(self.children) == 0:
+            default_boxed = ASTNode.box(ir.Constant(ir.IntType(32), 0), builder)
+            builder.ret(default_boxed)
             return
         value_node = self.children[0]
         value = value_node.codegen(builder, module, symbol_table)
@@ -364,6 +364,11 @@ class IfNode(ASTNode):
 
     def codegen(self, builder, module, symbol_table):
         cond_value = self.children[0].codegen(builder, module, symbol_table)
+        if ASTNode.is_boxed_value(cond_value):
+            cond_value = ASTNode.unbox(cond_value, builder, symbol_table)
+        if cond_value.type != ir.IntType(1):
+            cond_value = builder.trunc(cond_value, ir.IntType(1))
+
         with builder.if_else(cond_value) as (then, otherwise):
             with then:
                 self.children[1].codegen(builder, module, symbol_table)
@@ -394,25 +399,27 @@ class LetNode(ASTNode):
 
     def codegen(self, builder: IRBuilder, module, symbol_table):
         identifier_node = self.children[0]
-        value_node = self.children[1]
-        value = value_node.codegen(builder, module, symbol_table)
-        if value_node.token.type == TokenType.INT:
-            var_addr = builder.alloca(ir.IntType(32), name=identifier_node.token.value)
+        value_node      = self.children[1]
+        value           = value_node.codegen(builder, module, symbol_table)
+
+        if identifier_node.token.type != TokenType.IDENTIFIER:
+            raise CodeGenError("Invalid identifier")
+
+        # We don't store boxed values.
+        if ASTNode.is_boxed_value(value):
+            value = ASTNode.unbox(value, builder, symbol_table)
+            var_addr = builder.alloca(value.type)
             builder.store(value, var_addr)
-        elif value_node.token.type == TokenType.FLOAT:
-            var_addr = builder.alloca(ir.FloatType(), name=identifier_node.token.value)
-            builder.store(value, var_addr)
-        elif value_node.token.type == TokenType.FALSE or value_node.token.type == TokenType.TRUE:
-            var_addr = builder.alloca(ir.IntType(1), name=identifier_node.token.value)
-            builder.store(value, var_addr)
-        elif value_node.token.type == TokenType.STRING:
-            value.name = identifier_node.token.value
+        elif value_node.token.type in (TokenType.STRING, TokenType.IDENTIFIER, TokenType.FUNCTION):
             var_addr = value
-        elif value_node.token.type == TokenType.FUNCTION:
-            var_addr = value
-        else: # infix operations and IDENTIFIER token
-            var_addr = builder.alloca(value.type, name=identifier_node.token.value)
+        else: # INT, FLOAT, BOOL, infix operations, etc
+            var_addr = builder.alloca(value.type)
             builder.store(value, var_addr)
+        
+        # During parsing we set the name on the FunctionNode for codegen.
+        # This is because we need a unique name at the codegen site of a function (FunctionNode).
+        if value_node.token.type != TokenType.FUNCTION:
+            var_addr.name = identifier_node.token.value
 
         symbol_table[identifier_node.token.value] = var_addr
         return var_addr

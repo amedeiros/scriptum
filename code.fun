@@ -17,7 +17,7 @@ printf("Total Again!: %d\n", (one * two_hundred) + ((one * 100) / 2))
 
 # Test concat
 let x = "apples"
-let concat = "Concat: " + x 
+let concat = "Concat: " + x
 printf("(%s) and x is now (%s)\n", concat, x)
 
 
@@ -53,8 +53,6 @@ printf("%.2f\n", 100 / 10.0)
 
 # Function tests
 let add = -> (x, y) {
-  printf("X: %d\n", x)
-  printf("Y: %d\n", y)
   return x + y
 }
 printf("Results of Add: %d\n", add(10, 10))
@@ -63,6 +61,12 @@ let no_return = -> (x, y) {
   printf("NO RETURN X: %d Y: %d\n", x, y)
 }
 no_return(10, 20)
+
+let emprty_return = -> () {
+  puts("EMPTY RETURN")
+  return
+}
+emprty_return()
 
 # Verify scoping and reassignment
 let expected = x
@@ -83,11 +87,15 @@ printf("Outside the scope! X: %s\n", x)
 let call = -> (func, x, y) {
     return func(x, y)
 }
-printf("%d\n", call(add, 2, 3))
+printf("Nested: %d\n", call(add, 2, 3))
 
 
 let test_func_call = -> (func, x, y) {
-  let results = func(x, y) + 1
-  printf("Results Expect 51: %d\n", results)
+  let left = func(x, y)
+  printf("Left Expect 50: %d\n", left)
+  let right = func(func(x, y), func(x, y))
+  printf("Right Expect 100: %d\n", right)
+  let results = left + right
+  printf("Results Expect 150: %d\n", results)
 }
 test_func_call(add, 20, 30)

@@ -12,7 +12,7 @@ TOKEN_TO_TYPE = {
     TokenType.STRING: ir.ArrayType(ir.IntType(8), 8)
 }
 
-def analyze_function(ast, symbol_table):
+def analyze_function(ast):
     args = ast.children[0]
     if len(args) == 0:
         return # no arguments to process
@@ -40,9 +40,9 @@ def analyze_function(ast, symbol_table):
                 if arg.token.value == node.token.value:
                     arg.type = ir.PointerType(ir.FunctionType(ir.PointerType(value_struct_ty), [child.type for child in node.children]))
             elif isinstance(node, LetNode):
-                analyze_let(node, symbol_table, arg)
+                analyze_let(node, arg)
 
-def analyze_let(node, symbol_table, func_arg = None):
+def analyze_let(node, func_arg = None):
     if len(node.children) != 2:
         raise Exception(f"Let node must have exactly 2 children, got {len(node.children)} at line {node.token.line_number}")
     ident = node.children[0]
@@ -51,8 +51,7 @@ def analyze_let(node, symbol_table, func_arg = None):
     
     rhs = node.children[1]
     if isinstance(rhs, FunctionNode):
-        symbol_table[ident.token.value] = rhs
-        analyze_function(rhs, symbol_table)
+        analyze_function(rhs)
         ident.type = ir.PointerType(ir.FunctionType(ir.PointerType(value_struct_ty), [child.type for child in rhs.children[0]]))
     elif isinstance(rhs, FunctionCallNode):
         if func_arg and rhs.token.value == func_arg.token.value:
@@ -67,28 +66,9 @@ def analyze_let(node, symbol_table, func_arg = None):
         if type:
             ident.type = type
 
-def analyze(ast, symbol_table = SymbolTable()):
+def analyze(ast):
     for node in ast:
         if isinstance(node, LetNode):
-            analyze_let(node, symbol_table)
+            analyze_let(node)
         if isinstance(node, FunctionNode):
             raise Exception(f"Function should be defined with let at line {node.token.line_number}")
-
-if __name__ == "__main__":
-    code = '''
-    let call = -> (func, x, y) {
-        return func(x, y)
-    }
-
-    let add = -> (x, y) {
-        return x + y
-    }
-
-    call(add, 2, 3)
-    '''
-    lexer = Lexer(code)
-    parser = Parser(lexer)
-    ast = parser.parse()
-    analyze(ast)
-    breakpoint()
-    print_ast(ast)
