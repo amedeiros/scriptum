@@ -7,6 +7,63 @@ def test_empty_input():
     tokens = lex.tokenize()
     assert tokens == []
 
+def test_while():
+    code = "while"
+    lex = Lexer(code)
+    token = lex.next_token()
+    assert code == token.value
+    assert TokenType.WHILE == token.type
+
+def test_if():
+    code = "if"
+    lex = Lexer(code)
+    token = lex.next_token()
+    assert code == token.value
+    assert TokenType.IF == token.type
+
+def test_else():
+    code = "else"
+    lex = Lexer(code)
+    token = lex.next_token()
+    assert code == token.value
+    assert TokenType.ELSE == token.type
+
+def test_return():
+    code = "return"
+    lex = Lexer(code)
+    token = lex.next_token()
+    assert code == token.value
+    assert TokenType.RETURN == token.type
+
+def test_let():
+    code = "let"
+    lex = Lexer(code)
+    token = lex.next_token()
+    assert code == token.value
+    assert TokenType.LET == token.type
+
+def test_and_or():
+    code = {
+        "and": TokenType.AND,
+        "or": TokenType.OR
+    }
+    for k, v in code.items():
+        lex = Lexer(k)
+        token = lex.next_token()
+        assert token.value == k
+        assert token.type == v
+
+def test_true_false():
+    code = {
+        "true": TokenType.TRUE,
+        "false": TokenType.FALSE
+    }
+    for k, v in code.items():
+        lex = Lexer(k)
+        token = lex.next_token()
+        assert token.value == k
+        assert token.type == v
+
 def test_comment():
     code = "# This is a comment"
     lex = Lexer(code, ignore_comments=False)
