@@ -75,6 +75,9 @@ class Token:
 
     def __repr__(self):
         return f"Token({self.type}, {self.value}, {self.row}, {self.column})"
+    
+    def line_number(self):
+        return f"{self.row}:{self.column}"
 
 
 class LexerError(Exception):
@@ -266,14 +269,3 @@ class Lexer:
         string = self.source_code[start+1:self.ip-1] # skip over "
         string = bytes(string, "utf-8").decode("unicode_escape")
         return Token(TokenType.STRING, string, row, column)
-
-
-if __name__ == "__main__":
-    code = '''
-let add = (x, y=1) -> {
-    return x + y
-}
-'''
-    lex = Lexer(code)
-    while (cur := lex.next_token()) and cur.value != EOF:
-        print(cur)

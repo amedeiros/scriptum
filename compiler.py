@@ -2,7 +2,9 @@
 from llvmlite import binding, ir
 from lexer import Lexer
 from parser import Parser
+from lang_ast import SymbolTable
 import lang_builtins as builtins
+from semantic_analyzer import analyze
 
 CODE = open("code.fun").read()
 
@@ -23,12 +25,12 @@ def build_module(code=CODE):
     lexer = Lexer(code)
     parser = Parser(lexer)
     ast = parser.parse()
-    # print_ast(ast)
+    analyze(ast)
     module = ir.Module(name="my_module")
     builder = ir.IRBuilder()
-    symbol_table = {}
+    symbol_table = SymbolTable()
     # Declare built-in functions
-    builtins.declare_builtins(module, symbol_table)
+    builtins.declare_builtins(module, symbol_table, builder)
 
     func_type = ir.FunctionType(ir.VoidType(), [])
     main_func = ir.Function(module, func_type, name="main")
@@ -36,7 +38,6 @@ def build_module(code=CODE):
     builder = ir.IRBuilder(block)
     for node in ast:
         node.codegen(builder, module, symbol_table)
-    # print(module)
     builder.ret_void()
     return module
 

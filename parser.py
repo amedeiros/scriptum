@@ -53,7 +53,7 @@ class Parser:
         self._register_prefix(TokenType.BANG, self._parse_prefix_expression)
         self._register_prefix(TokenType.IF, self._parse_if_expression)
         self._register_prefix(TokenType.LPAREN, self._parse_grouped_expression)
-        # self._register_prefix(TokenType.FUNCTION, self._parse_function_expression)
+        self._register_prefix(TokenType.FUNCTION, self._parse_function_literal)
 
     def _load_infix_parse_funcs(self) -> None:
         self._register_infix(TokenType.AND, self._parse_infix_expression)
@@ -119,6 +119,29 @@ class Parser:
             self._consume(TokenType.ELSE)
             expression.add_child(self._parse_block_statement())
         return expression
+    
+    def _parse_function_literal(self) -> FunctionNode:
+        function = FunctionNode(self.current_token)
+        self._consume(TokenType.FUNCTION)
+        if self._consume(TokenType.LPAREN):
+            function.children.append(self._parse_function_params())
+        
+        function.children.append(self._parse_block_statement())
+        return function
+    
+    def _parse_function_params(self) -> list:
+        identifiers = []
+        if self._check(TokenType.RPAREN):
+            self._advance()
+            return identifiers
+        while not self._check(TokenType.RPAREN) and not self._is_eof():
+                ident = self._parse_identifier()
+                if ident:
+                    identifiers.append(ident)
+                if not self._check(TokenType.RPAREN):
+                    self._consume(TokenType.COMMA)
+        self._consume(TokenType.RPAREN)
+        return identifiers
 
     def _parse_block_statement(self) -> BlockNode:
         block = BlockNode(self.current_token)
@@ -142,6 +165,9 @@ class Parser:
         let.children.append(self._parse_identifier())
         self._consume(TokenType.ASSIGN)
         let.children.append(self._parse_expression(LOWEST))
+        # Check for function definition and assign the identifier name to the function name
+        if isinstance(let.children[len(let.children)-1], FunctionNode):
+            let.children[len(let.children)-1].name = let.children[0].token.value
 
         return let
     
@@ -261,42 +287,9 @@ class Parser:
 def print_ast(ast: list[ASTNode], level=0):
     indent = "  " * level
     for node in ast:
-        print(f"{indent}{node.__class__.__name__}: {node.token.value}")
+        print(f"{indent}{node.__class__.__name__}: {node.token.value} ({node.type.__class__.__name__})")
         for child in node.children:
-            print_ast([child], level + 1)
-
-if __name__ == "__main__":
-    code = '''
-let total = 1 + 1
-let x = "apples"
-let one = 1
-let floating = 10.019
-let truth = true
-let falsity = false
-let apples = floating
-# return apples
-if (truth) {
-  printf("TRUE!!!")
-} else {
-  printf("FALSE!!!")
-}
-'''
-    lexer = Lexer(code)
-    parser = Parser(lexer)
-    ast = parser.parse()
-    print_ast(ast)
-    from llvmlite import ir
-    module = ir.Module(name="my_module")
-    builder = ir.IRBuilder()
-    symbol_table = {}
-    # Declare built-in functions
-    import lang_builtins as builtins
-    builtins.declare_printf(module, symbol_table)
-
-    func_type = ir.FunctionType(ir.VoidType(), [])
-    main_func = ir.Function(module, func_type, name="main")
-    block = main_func.append_basic_block(name="entry")
-    builder = ir.IRBuilder(block)
-    for node in ast:
-        node.codegen(builder, module, symbol_table)
-    print(module)
+            if isinstance(child, list):
+                print_ast(child, level + 1)
+            else:
+                print_ast([child], level + 1)
