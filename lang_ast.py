@@ -381,7 +381,28 @@ class WhileNode(ASTNode):
         super().__init__(token)
 
     def codegen(self, builder, module, symbol_table):
-        pass
+        cond_block = builder.append_basic_block("while.cond")
+        body_block = builder.append_basic_block("while.body")
+        after_block = builder.append_basic_block("while.after")
+
+        builder.branch(cond_block)
+
+        # Condition block
+        builder.position_at_start(cond_block)
+        cond_value = self.children[0].codegen(builder, module, symbol_table)
+        if ASTNode.is_boxed_value(cond_value):
+            cond_value = ASTNode.unbox(cond_value, builder, symbol_table)
+        if cond_value.type != ir.IntType(1):
+            cond_value = builder.trunc(cond_value, ir.IntType(1))
+        builder.cbranch(cond_value, body_block, after_block)
+
+        # Body block
+        builder.position_at_start(body_block)
+        self.children[1].codegen(builder, module, symbol_table)
+        builder.branch(cond_block)
+
+        # After loop block
+        builder.position_at_start(after_block)
 
 class PrefixNode(ASTNode):
     def __init__(self, token: Token):
@@ -392,6 +413,19 @@ class PrefixNode(ASTNode):
 
     def codegen(self, builder, module, symbol_table):
         raise CodeGenError("Prefix expressions are not implemented yet")
+
+
+class AssignNode(ASTNode):
+    def __init__(self, token: Token):
+        super().__init__(token)
+
+    def codegen(self, builder: IRBuilder, module, symbol_table):
+        identifier_node = self.children[0]
+        value_node = self.children[1]
+        var_addr = symbol_table.get(identifier_node.token.value)
+        value = value_node.codegen(builder, module, symbol_table)
+        builder.store(value, var_addr)
+
 
 class LetNode(ASTNode):
     def __init__(self, token: Token):

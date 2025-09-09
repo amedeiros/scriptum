@@ -99,3 +99,10 @@ let test_func_call = -> (func, x, y) {
   printf("Results Expect 150: %d\n", results)
 }
 test_func_call(add, 20, 30)
+
+# While loops
+let n = 10
+while (n > 0) {
+    n = n - 1
+    printf("N is now: %d\n", n)
+}

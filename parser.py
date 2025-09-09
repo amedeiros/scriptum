@@ -17,6 +17,7 @@ PREFIX  = 7
 CALL    = 8
 
 PRECEDENCES = {}
+PRECEDENCES[TokenType.ASSIGN]   = EQUALS
 PRECEDENCES[TokenType.EQUAL]    = EQUALS
 PRECEDENCES[TokenType.NOT_EQ]   = EQUALS
 PRECEDENCES[TokenType.AND]      = AND
@@ -52,6 +53,7 @@ class Parser:
         self._register_prefix(TokenType.MINUS, self._parse_prefix_expression)
         self._register_prefix(TokenType.BANG, self._parse_prefix_expression)
         self._register_prefix(TokenType.IF, self._parse_if_expression)
+        self._register_prefix(TokenType.WHILE, self._parse_while_expression)
         self._register_prefix(TokenType.LPAREN, self._parse_grouped_expression)
         self._register_prefix(TokenType.FUNCTION, self._parse_function_literal)
 
@@ -69,6 +71,7 @@ class Parser:
         self._register_infix(TokenType.GT_EQ, self._parse_infix_expression)
         self._register_infix(TokenType.LT_EQ, self._parse_infix_expression)
         self._register_infix(TokenType.LPAREN, self._parse_call_expression)
+        self._register_infix(TokenType.ASSIGN, self._parse_assign_expression)
 
     def _register_prefix(self, token_type: TokenType, parse_func) -> None:
         self.prefix_parse_funcs[token_type] = parse_func
@@ -97,6 +100,13 @@ class Parser:
         self._consume(TokenType.RPAREN)
         return expr
 
+    def _parse_assign_expression(self, left: ASTNode) -> AssignNode:
+        assign = AssignNode(self.current_token)
+        assign.add_child(left)
+        self._consume(TokenType.ASSIGN)
+        assign.add_child(self._parse_expression(LOWEST))
+        return assign
+
     def _parse_infix_expression(self, left: ASTNode) -> BinaryOpNode:
         expression = BinaryOpNode(self.current_token)
         expression.add_child(left)
@@ -118,6 +128,17 @@ class Parser:
         if self._check(TokenType.ELSE):
             self._consume(TokenType.ELSE)
             expression.add_child(self._parse_block_statement())
+        return expression
+
+    def _parse_while_expression(self) -> WhileNode:
+        expression = WhileNode(self.current_token)
+        self._consume(TokenType.WHILE)
+        self._consume(TokenType.LPAREN)
+        # Condition
+        expression.add_child(self._parse_expression(LOWEST))
+        self._consume(TokenType.RPAREN)
+        # Consequence
+        expression.add_child(self._parse_block_statement())
         return expression
     
     def _parse_function_literal(self) -> FunctionNode:
