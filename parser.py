@@ -50,12 +50,15 @@ class Parser:
         self._register_prefix(TokenType.STRING, self._parse_string)
         self._register_prefix(TokenType.TRUE, self._parse_boolean)
         self._register_prefix(TokenType.FALSE, self._parse_boolean)
+        self._register_prefix(TokenType.PLUS, self._parse_prefix_expression)
         self._register_prefix(TokenType.MINUS, self._parse_prefix_expression)
         self._register_prefix(TokenType.BANG, self._parse_prefix_expression)
         self._register_prefix(TokenType.IF, self._parse_if_expression)
         self._register_prefix(TokenType.WHILE, self._parse_while_expression)
         self._register_prefix(TokenType.LPAREN, self._parse_grouped_expression)
         self._register_prefix(TokenType.FUNCTION, self._parse_function_literal)
+
+        self._register_prefix(TokenType.LBRACK, self._parse_array_literal)
 
     def _load_infix_parse_funcs(self) -> None:
         self._register_infix(TokenType.AND, self._parse_infix_expression)
@@ -206,6 +209,16 @@ class Parser:
         ident = self.current_token
         if self._match(TokenType.IDENTIFIER):
             return IdentifierNode(ident)
+
+    def _parse_array_literal(self) -> ArrayLiteralNode:
+        array = ArrayLiteralNode(self.current_token)
+        self._consume(TokenType.LBRACK)
+        while not self._check(TokenType.RBRACK) and not self._is_eof():
+            array.add_child(self._parse_expression(LOWEST))
+            if not self._check(TokenType.RBRACK):
+                self._consume(TokenType.COMMA)
+        self._consume(TokenType.RBRACK)
+        return array
 
     def _parse_int(self) -> NumberNode:
         int_token = self.current_token

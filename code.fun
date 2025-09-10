@@ -100,9 +100,33 @@ let test_func_call = -> (func, x, y) {
 }
 test_func_call(add, 20, 30)
 
+# Recursive functions
+let fact = -> (x) {
+    if (x <= 1) {
+        return 1
+    } else {
+        return x * fact(x - 1)
+    }
+}
+printf("Factorial 5: %d\n", fact(5))
+printf("Factorial 10: %d\n", fact(10))
+
 # While loops
 let n = 10
 while (n > 0) {
     n = n - 1
     printf("N is now: %d\n", n)
 }
+
+# Data structures
+let arr = [1, 2, 3, 4, 5]
+printf("Array size: %d\n", alen(arr))
+printf("Array Index 0: %d\n", aget(arr, 0))
+
+# let size_a = alen(arr)
+# let n = 0
+# while (n < size_a) {
+#   printf("[%d,", aget(arr, n))
+#   n = n + 1
+# }
+# printf("]\n")
