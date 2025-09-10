@@ -1,6 +1,6 @@
 # type: ignore
-from lexer import Lexer, Token, TokenType
-from lang_ast import *
+from scriptum.lexer import Lexer, Token, TokenType
+from scriptum.ast import *
 
 class ParseError(Exception):
     pass

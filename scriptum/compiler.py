@@ -1,10 +1,10 @@
 # type: ignore
 from llvmlite import binding, ir
-from lexer import Lexer
-from parser import Parser
-from lang_ast import SymbolTable
-import lang_builtins as builtins
-from semantic_analyzer import analyze
+from scriptum.lexer import Lexer
+from scriptum.parser import Parser
+from scriptum.ast import SymbolTable
+from scriptum.semantic_analyzer import analyze
+import scriptum.builtins as builtins
 
 CODE = open("code.fun").read()
 

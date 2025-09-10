@@ -1,5 +1,5 @@
 # type: ignore
-from lexer import Token, TokenType
+from scriptum.lexer import Token, TokenType
 from abc import ABC, abstractmethod
 from llvmlite import ir
 from llvmlite.ir.builder import IRBuilder

@@ -1,8 +1,6 @@
 # type: ignore
 from llvmlite import ir
-from parser import Parser, print_ast
-from lexer import Lexer
-from lang_ast import *
+from scriptum.ast import *
 
 TOKEN_TO_TYPE = {
     TokenType.INT: ir.IntType(32),

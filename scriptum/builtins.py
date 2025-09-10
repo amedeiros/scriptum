@@ -1,6 +1,6 @@
 # type: ignore
 from llvmlite import ir
-from lang_ast import value_struct_ty, vector_struct_ty, TYPE_INT, TYPE_FLOAT, TYPE_BOOL, TYPE_STRING, TYPE_ARRAY
+from scriptum.ast import value_struct_ty, vector_struct_ty, TYPE_INT, TYPE_FLOAT, TYPE_BOOL, TYPE_STRING, TYPE_ARRAY
 
 # Begin built-in printing functions
 def declare_printf(module, symbol_table):

@@ -1,5 +1,4 @@
-import pytest
-from ..lexer import Lexer, KEYWORDS, TokenType
+from scriptum.lexer import Lexer, KEYWORDS, TokenType
 
 def test_empty_input():
     code = ""
