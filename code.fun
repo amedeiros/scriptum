@@ -123,10 +123,17 @@ let arr = [1, 2, 3, 4, 5]
 printf("Array size: %d\n", alen(arr))
 printf("Array Index 0: %d\n", aget(arr, 0))
 
-# let size_a = alen(arr)
-# let n = 0
-# while (n < size_a) {
-#   printf("[%d,", aget(arr, n))
-#   n = n + 1
-# }
-# printf("]\n")
+let size_a = alen(arr)
+let end_list = size_a - 1
+let n = 0
+printf("Array Contents: [")
+while (n < size_a) {
+  let array_value = aget(arr, n)
+  if (n == end_list) {
+    printf("%d", array_value)
+  } else {
+    printf("%d,", array_value)
+  }
+  n = n + 1
+}
+printf("]\n")

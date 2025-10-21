@@ -264,8 +264,11 @@ class IdentifierNode(ASTNode):
         if isinstance(var_addr.type, ir.types.PointerType) and \
             isinstance(var_addr.type.pointee, ir.types.ArrayType):
             return var_addr
+        # Only load if it's a pointer to a non-array type
+        if isinstance(var_addr.type, ir.types.PointerType):
+            return builder.load(var_addr)
         # Otherwise return the loaded value
-        return builder.load(var_addr)
+        return var_addr
 
 class FunctionNode(ASTNode):
     def __init__(self, token: Token, name=None):
