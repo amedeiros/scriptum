@@ -1,4 +1,6 @@
 # type: ignore
+import sys
+import os
 from llvmlite import binding, ir
 from scriptum.lexer import Lexer
 from scriptum.parser import Parser
@@ -7,11 +9,6 @@ from scriptum.semantic_analyzer import analyze
 import scriptum.builtins as builtins
 
 CODE = open("code.fun").read()
-
-# Initialize LLVM
-binding.initialize()
-binding.initialize_native_target()
-binding.initialize_native_asmprinter()
 
 def repl():
     while True:
@@ -27,6 +24,8 @@ def build_module(code=CODE):
     ast = parser.parse()
     analyze(ast)
     module = ir.Module(name="my_module")
+    # Set the target triple to the host's triple
+    module.triple = binding.get_default_triple()
     builder = ir.IRBuilder()
     symbol_table = SymbolTable()
     # Declare built-in functions
@@ -42,25 +41,31 @@ def build_module(code=CODE):
     return module
 
 if __name__ == "__main__":
-    # Create an execution engine
-    target = binding.Target.from_default_triple()
-    target_machine = target.create_target_machine()
-    backing_mod = binding.parse_assembly("")
-    engine = binding.create_mcjit_compiler(backing_mod, target_machine)
+    # Validate command line arguments
+    if len(sys.argv) < 2:
+        print("Usage: python -m scriptum.compiler <source_file>")
+        sys.exit(1)
 
-    module = build_module()
-    # Parse your IR
-    llvm_ir = str(module)
-    mod = binding.parse_assembly(llvm_ir)
-    mod.verify()
+    # Read source file
+    source_file = sys.argv[1]
+    with open(source_file, "r") as f:
+        code = f.read()
 
-    # Add the module and finalize
-    engine.add_module(mod)
-    engine.finalize_object()
-    engine.run_static_constructors()
+    # Build LLVM module
+    module = build_module(code)
 
-    # Get the address of the 'main' function and run it!
-    main_ptr = engine.get_function_address("main")
-    import ctypes
-    main_func = ctypes.CFUNCTYPE(None)(main_ptr)
-    main_func()
+    # Write LLVM IR to file
+    root_dir = "./bin/"
+    root_file = source_file.rsplit(".", 1)[0]
+    llvm_instructions = root_dir + root_file + ".ll"
+    with open(llvm_instructions, "w") as f:
+        f.write(str(module))
+    print(f"LLVM IR written to {llvm_instructions}")
+
+    # Write object file and executable
+    obj_file = root_dir + root_file + ".o"
+    executable_file = root_dir + root_file
+    os.system(f"llc -filetype=obj {llvm_instructions} -o {obj_file}")
+    print(f"Object file written to {obj_file}")
+    os.system(f"clang {obj_file} -o {executable_file}")
+    print(f"Executable written to {executable_file}")
