@@ -5,7 +5,6 @@ from llvmlite import binding, ir
 from scriptum.lexer import Lexer
 from scriptum.parser import Parser
 from scriptum.ast import SymbolTable
-from scriptum.semantic_analyzer import analyze
 import scriptum.builtins as builtins
 
 CODE = open("code.fun").read()
