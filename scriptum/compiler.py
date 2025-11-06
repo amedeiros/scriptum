@@ -22,14 +22,13 @@ def build_module(code=CODE):
     lexer = Lexer(code)
     parser = Parser(lexer)
     ast = parser.parse()
-    analyze(ast)
     module = ir.Module(name="my_module")
     # Set the target triple to the host's triple
     module.triple = binding.get_default_triple()
     builder = ir.IRBuilder()
     symbol_table = SymbolTable()
     # Declare built-in functions
-    builtins.declare_builtins(module, symbol_table, builder)
+    builtins.declare_builtins(module, symbol_table)
 
     func_type = ir.FunctionType(ir.VoidType(), [])
     main_func = ir.Function(module, func_type, name="main")

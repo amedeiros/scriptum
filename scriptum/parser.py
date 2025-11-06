@@ -31,6 +31,7 @@ PRECEDENCES[TokenType.MINUS]    = SUM
 PRECEDENCES[TokenType.SLASH]    = PRODUCT
 PRECEDENCES[TokenType.STAR]     = PRODUCT
 PRECEDENCES[TokenType.LPAREN]   = CALL
+PRECEDENCES[TokenType.LBRACK]   = CALL + 1  # Subscript binds tighter than function call
 
 
 class Parser:
@@ -75,6 +76,7 @@ class Parser:
         self._register_infix(TokenType.LT_EQ, self._parse_infix_expression)
         self._register_infix(TokenType.LPAREN, self._parse_call_expression)
         self._register_infix(TokenType.ASSIGN, self._parse_assign_expression)
+        self._register_infix(TokenType.LBRACK, self._parse_subscript_expression)
 
     def _register_prefix(self, token_type: TokenType, parse_func) -> None:
         self.prefix_parse_funcs[token_type] = parse_func
@@ -109,6 +111,16 @@ class Parser:
         self._consume(TokenType.ASSIGN)
         assign.add_child(self._parse_expression(LOWEST))
         return assign
+
+    def _parse_subscript_expression(self, base: ASTNode) -> SubscriptNode:
+        # The current token is LBRACK
+        subscript = SubscriptNode(self.current_token)
+        self._advance()  # consume '['
+        index_expr = self._parse_expression(LOWEST)
+        subscript.add_child(base)      # base, e.g., arr
+        subscript.add_child(index_expr) # index, e.g., 0
+        self._consume(TokenType.RBRACK)
+        return subscript
 
     def _parse_infix_expression(self, left: ASTNode) -> BinaryOpNode:
         expression = BinaryOpNode(self.current_token)
@@ -147,9 +159,16 @@ class Parser:
     def _parse_function_literal(self) -> FunctionNode:
         function = FunctionNode(self.current_token)
         self._consume(TokenType.FUNCTION)
+        # Parse function parameters
         if self._consume(TokenType.LPAREN):
             function.children.append(self._parse_function_params())
         
+        # Parse return type defaults to void
+        if self._check(TokenType.COLON):
+            self._consume(TokenType.COLON)
+            function.static_return_type = self._parse_static_type()
+
+        # Parse function body
         function.children.append(self._parse_block_statement())
         return function
     
@@ -159,9 +178,28 @@ class Parser:
             self._advance()
             return identifiers
         while not self._check(TokenType.RPAREN) and not self._is_eof():
+                # Parse identifier
                 ident = self._parse_identifier()
-                if ident:
-                    identifiers.append(ident)
+                identifiers.append(ident)
+                # Parse static type
+                self._consume(TokenType.COLON)
+                ident.static_type = self._parse_static_type()
+                # Parse callable argument and return types
+                if ident.static_type == TokenType.TYPE_CALLABLE or ident.static_type == TokenType.TYPE_ARRAY:
+                    if self._check(TokenType.LBRACK):
+                        self._consume(TokenType.LBRACK)
+                        callable_arg_types = []
+                        while not self._check(TokenType.RBRACK) and not self._is_eof():
+                            callable_arg_types.append(self._parse_static_type())
+                            if not self._check(TokenType.RBRACK):
+                                self._consume(TokenType.COMMA)
+                        self._consume(TokenType.RBRACK)
+                        ident.callable_arg_types = callable_arg_types
+                    # Parse return type for callable
+                    if self._check(TokenType.COLON):
+                        self._consume(TokenType.COLON)
+                        ident.callable_return_type = self._parse_static_type()
+
                 if not self._check(TokenType.RPAREN):
                     self._consume(TokenType.COMMA)
         self._consume(TokenType.RPAREN)
@@ -184,9 +222,12 @@ class Parser:
             return self._parse_expression(LOWEST)
         
     def _parse_let_statement(self) -> LetNode:
+        # Parse let statement
         let = LetNode(self.current_token)
         self._consume(TokenType.LET)
+        # Parse identifier
         let.children.append(self._parse_identifier())
+        # Parse the expression assigned to the identifier
         self._consume(TokenType.ASSIGN)
         let.children.append(self._parse_expression(LOWEST))
         # Check for function definition and assign the identifier name to the function name
@@ -273,6 +314,28 @@ class Parser:
             left_expr = infix(left_expr)
 
         return left_expr
+    
+    def _parse_static_type(self) -> TokenType:
+        if self._check(TokenType.TYPE_INT):
+            self._advance()
+            return TokenType.TYPE_INT
+        if self._check(TokenType.TYPE_FLOAT):
+            self._advance()
+            return TokenType.TYPE_FLOAT
+        if self._check(TokenType.TYPE_STRING):
+            self._advance()
+            return TokenType.TYPE_STRING
+        if self._check(TokenType.TYPE_BOOL):
+            self._advance()
+            return TokenType.TYPE_BOOL
+        if self._check(TokenType.TYPE_ARRAY):
+            self._advance()
+            return TokenType.TYPE_ARRAY
+        if self._check(TokenType.TYPE_CALLABLE):
+            self._advance()
+            return TokenType.TYPE_CALLABLE
+
+        self._error(self.current_token, f"expected type annotation (int, float, str) found {self.current_token.value} instead")
 
     def _match(self, types) -> bool:
         if not isinstance(types, list):
