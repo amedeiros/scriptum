@@ -2,6 +2,7 @@
 import sys
 import os
 from llvmlite import binding, ir
+from llvmlite.binding import PassManagerBuilder, ModulePassManager
 from scriptum.lexer import Lexer
 from scriptum.parser import Parser
 from scriptum.ast import SymbolTable
@@ -16,6 +17,30 @@ def repl():
             break
         module = build_module(code)
         execute_module(module)
+
+def optimize_module(module):
+    """
+    Optimize the given LLVM module using llvmlite's optimization passes.
+    """
+    # Initialize the LLVM target and pass manager
+    binding.initialize()
+    binding.initialize_native_target()
+    binding.initialize_native_asmprinter()
+
+    # Create a PassManagerBuilder and set optimization level
+    pmb = PassManagerBuilder()
+    pmb.opt_level = 3  # Set optimization level (0-3, where 3 is the highest)
+
+    # Create a PassManager and populate it with passes
+    pm = ModulePassManager()
+    pmb.populate(pm)
+
+    # Run the optimization passes on the module
+    llvm_module = binding.parse_assembly(str(module))
+    pm.run(llvm_module)
+
+    # Return the optimized module as a string
+    return llvm_module
 
 def build_module(code=CODE):
     lexer = Lexer(code)
@@ -51,6 +76,9 @@ if __name__ == "__main__":
 
     # Build LLVM module
     module = build_module(code)
+
+    # Optimize the module
+    optimized_module = optimize_module(module)
 
     # Write LLVM IR to file
     root_dir = "./bin/"
