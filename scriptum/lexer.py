@@ -52,6 +52,15 @@ class TokenType(enum.Enum):
     TRUE   = "TRUE"
     FALSE  = "FALSE"
 
+    # Static Types
+    TYPE_INT    = "TYPE_INT"
+    TYPE_FLOAT  = "TYPE_FLOAT"
+    TYPE_STRING = "TYPE_STRING"
+    TYPE_BOOL   = "TYPE_BOOL"
+    TYPE_ARRAY  = "TYPE_ARRAY"
+    TYPE_VOID   = "TYPE_VOID"
+    TYPE_CALLABLE = "TYPE_CALLABLE"
+
 EOF      = "\0"
 KEYWORDS = {
     "if":     TokenType.IF,
@@ -62,7 +71,14 @@ KEYWORDS = {
     "and":    TokenType.AND,
     "or":     TokenType.OR,
     "true":   TokenType.TRUE,
-    "false":  TokenType.FALSE
+    "false":  TokenType.FALSE,
+    "int":    TokenType.TYPE_INT,
+    "float":  TokenType.TYPE_FLOAT,
+    "str":    TokenType.TYPE_STRING,
+    "bool":   TokenType.TYPE_BOOL,
+    "array":  TokenType.TYPE_ARRAY,
+    "void":   TokenType.TYPE_VOID,
+    "callable": TokenType.TYPE_CALLABLE,
 }
 
 

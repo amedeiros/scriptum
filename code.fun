@@ -52,12 +52,12 @@ printf("%d\n", 100 / 10)
 printf("%.2f\n", 100 / 10.0)
 
 # Function tests
-let add = -> (x, y) {
+let add = -> (x: int, y: int): int {
   return x + y
 }
 printf("Results of Add: %d\n", add(10, 10))
 
-let no_return = -> (x, y) {
+let no_return = -> (x: int, y: int) {
   printf("NO RETURN X: %d Y: %d\n", x, y)
 }
 no_return(10, 20)
@@ -84,13 +84,13 @@ scoping_test()
 printf("Outside the scope! X: %s\n", x)
 
 # Functions as params
-let call = -> (func, x, y) {
+let call = -> (func: callable[int, int]:int, x: int, y: int): int {
     return func(x, y)
 }
 printf("Nested: %d\n", call(add, 2, 3))
 
 
-let test_func_call = -> (func, x, y) {
+let test_func_call = -> (func: callable[int, int]:int, x: int, y: int) {
   let left = func(x, y)
   printf("Left Expect 50: %d\n", left)
   let right = func(func(x, y), func(x, y))
@@ -101,12 +101,12 @@ let test_func_call = -> (func, x, y) {
 test_func_call(add, 20, 30)
 
 # Recursive functions
-let fact = -> (x) {
-    if (x <= 1) {
-        return 1
-    } else {
-        return x * fact(x - 1)
-    }
+let fact = -> (x: int): int {
+  if (x <= 1) {
+    return 1
+  }
+  
+  return x * fact(x - 1)
 }
 printf("Factorial 5: %d\n", fact(5))
 printf("Factorial 10: %d\n", fact(10))
@@ -114,26 +114,37 @@ printf("Factorial 10: %d\n", fact(10))
 # While loops
 let n = 10
 while (n > 0) {
-    n = n - 1
-    printf("N is now: %d\n", n)
+  printf("N is now: %d\n", n)
+  n = n - 1
 }
 
 # Data structures
 let arr = [1, 2, 3, 4, 5]
 printf("Array size: %d\n", alen(arr))
-printf("Array Index 0: %d\n", aget(arr, 0))
+printf("Array Index 0: %d\n", arr[0])
 
-let size_a = alen(arr)
-let end_list = size_a - 1
-let n = 0
-printf("Array Contents: [")
-while (n < size_a) {
-  let array_value = aget(arr, n)
-  if (n == end_list) {
-    printf("%d", array_value)
-  } else {
-    printf("%d,", array_value)
+let pp_int_array = -> (arr: array[int]) {
+  let size_a = alen(arr)
+  let end_list = size_a - 1
+  let n = 0
+  printf("Array Contents: [")
+  while (n < size_a) {
+    let array_value = arr[n]
+    if (n == end_list) {
+      printf("%d", array_value)
+    } else {
+      printf("%d,", array_value)
+    }
+    n = n + 1
   }
-  n = n + 1
+  printf("]\n")
 }
-printf("]\n")
+pp_int_array(arr)
+
+# Test array assignment
+arr[2] = 100
+printf("Array Index 2 after assignment should be 100: %d\n", arr[2])
+
+# Array litteral tests
+printf("Array Litteral Index 1 value should be 3.14: %.2f\n", [1.4, 3.14, 5.687][1])
+printf("Array Litteral Index 0 value should be 'scriptum': %s\n", ["hello", "world", "from", "scriptum"][3])
