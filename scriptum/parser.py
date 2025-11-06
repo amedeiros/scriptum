@@ -178,28 +178,11 @@ class Parser:
             self._advance()
             return identifiers
         while not self._check(TokenType.RPAREN) and not self._is_eof():
-                # Parse identifier
-                ident = self._parse_identifier()
-                identifiers.append(ident)
-                # Parse static type
-                self._consume(TokenType.COLON)
-                ident.static_type = self._parse_static_type()
-                # Parse callable argument and return types
-                if ident.static_type == TokenType.TYPE_CALLABLE or ident.static_type == TokenType.TYPE_ARRAY:
-                    if self._check(TokenType.LBRACK):
-                        self._consume(TokenType.LBRACK)
-                        callable_arg_types = []
-                        while not self._check(TokenType.RBRACK) and not self._is_eof():
-                            callable_arg_types.append(self._parse_static_type())
-                            if not self._check(TokenType.RBRACK):
-                                self._consume(TokenType.COMMA)
-                        self._consume(TokenType.RBRACK)
-                        ident.callable_arg_types = callable_arg_types
-                    # Parse return type for callable
-                    if self._check(TokenType.COLON):
-                        self._consume(TokenType.COLON)
-                        ident.callable_return_type = self._parse_static_type()
-
+                # Parse the argument identifier
+                arg_ident = self._parse_argument_identifier()
+                if not arg_ident:
+                    self._error(self.current_token, "expected function argument identifier")
+                identifiers.append(arg_ident)
                 if not self._check(TokenType.RPAREN):
                     self._consume(TokenType.COMMA)
         self._consume(TokenType.RPAREN)
@@ -250,6 +233,33 @@ class Parser:
         ident = self.current_token
         if self._match(TokenType.IDENTIFIER):
             return IdentifierNode(ident)
+    
+    def _parse_argument_identifier(self) -> ArgumentIdentifierNode:
+        ident = self.current_token
+        if self._match(TokenType.IDENTIFIER):
+            # Parse static type
+            self._consume(TokenType.COLON)
+            static_type = self._parse_static_type()
+            arg_node = ArgumentIdentifierNode(ident, static_type)
+            # Parse callable argument and return types
+            if static_type == TokenType.TYPE_CALLABLE or static_type == TokenType.TYPE_ARRAY:
+                if self._check(TokenType.LBRACK):
+                    self._consume(TokenType.LBRACK)
+                    callable_arg_types = []
+                    while not self._check(TokenType.RBRACK) and not self._is_eof():
+                        callable_arg_types.append(self._parse_static_type())
+                        if not self._check(TokenType.RBRACK):
+                            self._consume(TokenType.COMMA)
+                    self._consume(TokenType.RBRACK)
+                    arg_node.callable_arg_types = callable_arg_types
+                # Parse return type for callable
+                if self._check(TokenType.COLON):
+                    self._consume(TokenType.COLON)
+                    arg_node.callable_return_type = self._parse_static_type()
+
+            return arg_node
+        return None
+
 
     def _parse_array_literal(self) -> ArrayLiteralNode:
         array = ArrayLiteralNode(self.current_token)

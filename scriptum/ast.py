@@ -58,7 +58,10 @@ class ASTNode(ABC):
     def add_child(self, child: "ASTNode"):
         self.children.append(child)
 
-    def gentype(self, static_type: TokenType) -> ir.Type:
+    def gentype(self) -> ir.Type:
+        raise NotImplementedError("gentype not implemented for base ASTNode")
+
+    def _gentype_from_token(self, static_type: TokenType) -> ir.Type:
         if static_type == TokenType.TYPE_INT:
             return ir.IntType(64)
         elif static_type == TokenType.TYPE_FLOAT:
@@ -236,25 +239,13 @@ class BooleanNode(ASTNode):
         return ir.Constant(ir.IntType(1), 1 if self.value else 0)
 
 class IdentifierNode(ASTNode):
-    static_type: Literal[TokenType.TYPE_INT, TokenType.TYPE_FLOAT,
-                         TokenType.TYPE_STRING, TokenType.TYPE_BOOL,
-                         TokenType.TYPE_ARRAY, TokenType.TYPE_CALLABLE]
-    callable_arg_types: list(Literal[TokenType.TYPE_INT, TokenType.TYPE_FLOAT,
-                                TokenType.TYPE_STRING, TokenType.TYPE_BOOL,
-                                TokenType.TYPE_ARRAY, TokenType.TYPE_CALLABLE])
-    callable_return_type: ir.Type
-
     def __init__(self, token: Token):
         super().__init__(token)
         self.callable_arg_types = []
         self.callable_return_type = TokenType.TYPE_VOID
 
     def gentype(self) -> ir.Type:
-        if self.static_type == TokenType.TYPE_CALLABLE:
-            return_type = super().gentype(self.callable_return_type)
-            arg_types = [super().gentype(t) for t in self.callable_arg_types]
-            return ir.PointerType(ir.FunctionType(return_type, arg_types))
-        type = super().gentype(self.static_type)
+        type = self._gentype_from_token(self.static_type)
         if type:
             return type
 
@@ -279,6 +270,29 @@ class IdentifierNode(ASTNode):
         # Otherwise return the loaded value
         return var_addr
 
+
+class ArgumentIdentifierNode(IdentifierNode):
+    static_type: Literal[TokenType.TYPE_INT, TokenType.TYPE_FLOAT,
+                         TokenType.TYPE_STRING, TokenType.TYPE_BOOL,
+                         TokenType.TYPE_ARRAY, TokenType.TYPE_CALLABLE]
+    callable_arg_types: list[Literal[TokenType.TYPE_INT, TokenType.TYPE_FLOAT,
+                                     TokenType.TYPE_STRING, TokenType.TYPE_BOOL,
+                                     TokenType.TYPE_ARRAY, TokenType.TYPE_CALLABLE]]
+    callable_return_type: ir.Type
+
+    def __init__(self, token: Token, static_type, callable_arg_types=[], callable_return_type=TokenType.TYPE_VOID):
+        super().__init__(token)
+        self.static_type = static_type
+        self.callable_arg_types = callable_arg_types
+        self.callable_return_type = callable_return_type
+
+    def gentype(self) -> ir.Type:
+        if self.static_type == TokenType.TYPE_CALLABLE:
+            return_type = self._gentype_from_token(self.callable_return_type)
+            arg_types = [self._gentype_from_token(t) for t in self.callable_arg_types]
+            return ir.PointerType(ir.FunctionType(return_type, arg_types))
+        return self._gentype_from_token(self.static_type)
+
 class FunctionNode(ASTNode):
     static_return_type: Literal[TokenType.TYPE_INT, TokenType.TYPE_FLOAT,
                                 TokenType.TYPE_STRING, TokenType.TYPE_BOOL,
@@ -290,7 +304,7 @@ class FunctionNode(ASTNode):
         self.static_return_type = TokenType.TYPE_VOID
 
     def gentype(self) -> ir.Type:
-        type = super().gentype(self.static_return_type)
+        type = self._gentype_from_token(self.static_return_type)
         if type:
             return type
         raise CodeGenError(f"Unknown static return type for function {self.name}")
