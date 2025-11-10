@@ -358,6 +358,40 @@ class ArrayRemoveNode(ASTNode):
         
         return builder.call(remove_func, [array_ptr, index])
 
+class ArrayInsertNode(ASTNode):
+    def codegen(self, builder: IRBuilder, module: Module, symbol_table: dict[str, any]):
+        array_node = self.children[0]
+        index_node = self.children[1]
+        value_node = self.children[2]
+        array_ptr = array_node.codegen(builder, module, symbol_table)
+        index = index_node.codegen(builder, module, symbol_table)
+        value = value_node.codegen(builder, module, symbol_table)
+
+        # We want the static type of the array elements not the value passed.
+        if array_node.token.type == TokenType.IDENTIFIER:
+            static_type = symbol_table.get(f"{array_node.token.value}_type")
+        else:
+            static_type = array_node.static_type
+
+        if static_type is None:
+            raise CodeGenError(f"Cannot determine static type of array for pop: {array_node.token.value}")
+        
+        insert_func = None
+        if static_type == ir.IntType(64):
+            insert_func = symbol_table["int_array_insert"]
+        elif static_type == ir.FloatType():
+            insert_func = symbol_table["float_array_insert"]
+        elif static_type == ir.IntType(1):
+            insert_func = symbol_table["bool_array_insert"]
+        elif static_type == ir.PointerType(vector_struct_ty):
+            insert_func = symbol_table["array_array_insert"]
+        elif ASTNode.is_string_value(static_type):
+            insert_func = symbol_table["string_array_insert"]
+        else:
+            raise CodeGenError(f"Unsupported array element type for insert: {static_type}")
+        
+        builder.call(insert_func, [array_ptr, index, value])
+
 class ArrayPopNode(ASTNode):
     def codegen(self, builder: IRBuilder, module: Module, symbol_table: dict[str, any]):
         array_node = self.children[0]

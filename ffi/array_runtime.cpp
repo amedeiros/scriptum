@@ -58,6 +58,13 @@ extern "C" {
         array->data.pop_back();
         return removed;
     }
+
+    void int_array_insert(IntArray* array, int64_t index, int64_t value) {
+        if (index < 0 || index > array->data.size()) {
+            throw std::out_of_range("Index out of bounds");
+        }
+        array->data.insert(array->data.begin() + index, value);
+    }
 }
 
 
@@ -116,6 +123,13 @@ extern "C" {
         array->data.pop_back();
         return removed;
     }
+
+    void float_array_insert(FloatArray* array, int64_t index, float value) {
+        if (index < 0 || index > array->data.size()) {
+            throw std::out_of_range("Index out of bounds");
+        }
+        array->data.insert(array->data.begin() + index, value);
+    }
 }
 
 
@@ -173,6 +187,13 @@ extern "C" {
         bool removed = array->data.back();
         array->data.pop_back();
         return removed;
+    }
+
+    void bool_array_insert(BoolArray* array, int64_t index, bool value) {
+        if (index < 0 || index > array->data.size()) {
+            throw std::out_of_range("Index out of bounds");
+        }
+        array->data.insert(array->data.begin() + index, value);
     }
 }
 
@@ -238,6 +259,13 @@ extern "C" {
         std::strcpy(ret, removed.c_str());
         return ret;
     }
+
+    void string_array_insert(StringArray* array, int64_t index, const char* value) {
+        if (index < 0 || index > array->data.size()) {
+            throw std::out_of_range("Index out of bounds");
+        }
+        array->data.insert(array->data.begin() + index, std::string(value));
+    }
 }
 
 struct ArrayArray {
@@ -294,6 +322,13 @@ extern "C" {
         void* removed = array->data.back();
         array->data.pop_back();
         return removed;
+    }
+
+    void array_array_insert(ArrayArray* array, int64_t index, void* value) {
+        if (index < 0 || index > array->data.size()) {
+            throw std::out_of_range("Index out of bounds");
+        }
+        array->data.insert(array->data.begin() + index, value);
     }
 }
 

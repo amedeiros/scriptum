@@ -303,6 +303,8 @@ class Parser:
             expression = ArrayRemoveNode(function_identifier.token)
         elif function_identifier.token.value == "pop":
             expression = ArrayPopNode(function_identifier.token)
+        elif function_identifier.token.value == "insert":
+            expression = ArrayInsertNode(function_identifier.token)
         else:
             expression = FunctionCallNode(function_identifier.token)
 

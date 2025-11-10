@@ -101,6 +101,11 @@ def declare_array_functions(module, symbol_table):
         array_pop = ir.Function(module, array_pop_ty, name=f"{data_type}_array_pop")
         symbol_table[f"{data_type}_array_pop"] = array_pop
 
+        # Declare <data_type>_array_insert
+        array_insert_ty = ir.FunctionType(ir.VoidType(), [ir.PointerType(vector_struct_ty), ir.IntType(64), ret_type])
+        array_insert = ir.Function(module, array_insert_ty, name=f"{data_type}_array_insert")
+        symbol_table[f"{data_type}_array_insert"] = array_insert
+
 
 def declare_builtins(module, symbol_table):
     declare_printf(module, symbol_table)
