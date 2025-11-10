@@ -10,8 +10,6 @@ from typing import Literal
 vector_struct_ty = ir.LiteralStructType([
     ir.IntType(64),                  # type tag
     ir.PointerType(ir.IntType(8)),   # data pointer (opaque)
-    ir.IntType(64),                  # length
-    ir.IntType(64)                   # capacity
 ])
 
 # Type tags
@@ -20,6 +18,12 @@ TYPE_FLOAT = 1
 TYPE_BOOL = 2
 TYPE_STRING = 3
 TYPE_ARRAY = 4
+
+def load_array_type_tag(builder: IRBuilder, array_ptr: ir.Value) -> ir.Value:
+    type_tag_ptr = builder.gep(array_ptr, [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), 0)])
+    type_tag = builder.load(type_tag_ptr)
+    return type_tag
+
 
 class SymbolTable(dict[str, ir.Value]):
     def __init__(self, parent: "SymbolTable" = None):
@@ -67,7 +71,7 @@ class ASTNode(ABC):
         elif static_type == TokenType.TYPE_FLOAT:
             return ir.FloatType()
         elif static_type == TokenType.TYPE_STRING:
-            return ir.ArrayType(ir.IntType(8), 0)
+            return ir.PointerType(ir.IntType(8))
         elif static_type == TokenType.TYPE_BOOL:
             return ir.IntType(1)
         elif static_type == TokenType.TYPE_ARRAY:
@@ -83,13 +87,18 @@ class ASTNode(ABC):
 
     @staticmethod
     def is_string_value(val):
-        t = val.type
+        return isinstance(val, ir.PointerType) and val.pointee == ir.IntType(8) or \
+                (hasattr(val, 'type') and isinstance(val.type, ir.PointerType) and val.type.pointee == ir.IntType(8))
+        # if hasattr(val, 'type'):
+        #     t = val.type
+        # else:
+        #     t = val
 
-        return (
-            isinstance(t, ir.PointerType) and
-            isinstance(t.pointee, ir.ArrayType) and
-            t.pointee.element == ir.IntType(8)
-        )
+        # return (
+        #     isinstance(t, ir.PointerType) and
+        #     isinstance(t.pointee, ir.ArrayType) and
+        #     t.pointee.element == ir.IntType(8)
+        # )
 
 class NumberNode(ASTNode):
     def __init__(self, token: Token):
@@ -104,115 +113,88 @@ class NumberNode(ASTNode):
         raise CodeGenError(f"Unknown number type {self.token.type}")
     
 class SubscriptNode(ASTNode):
-    def __init__(self, token: Token):
-        super().__init__(token)
+    static_type: ir.Type
 
     def codegen(self, builder, module, symbol_table):
         base_node = self.children[0]
-        base = base_node.codegen(builder, module, symbol_table)
-        index = self.children[1].codegen(builder, module, symbol_table)
-        # Ensure we have a pointer to the struct
-        if isinstance(base.type, ir.LiteralStructType) and base.type == vector_struct_ty:
-            struct_ptr = builder.alloca(vector_struct_ty)
-            builder.store(base, struct_ptr)
-            array_pointer = struct_ptr
+        index_node = self.children[1]
+
+        # Generate code for the base array and index
+        array_ptr = base_node.codegen(builder, module, symbol_table)
+        index = index_node.codegen(builder, module, symbol_table)
+
+        # Determine the static type of the array elements
+        self.static_type = base_node.static_type
+        if self.static_type is None and base_node.token.type == TokenType.IDENTIFIER:
+            self.static_type = symbol_table.get(f"{base_node.token.value}_type")
+        if self.static_type is None:
+            raise CodeGenError("Cannot subscript array with unknown element type")
+
+        # Select the appropriate get function based on the static type
+        get_array_func = None
+        if self.static_type == ir.IntType(64):
+            get_array_func = symbol_table["int_array_get"]
+        elif self.static_type == ir.FloatType():
+            get_array_func = symbol_table["float_array_get"]
+        elif self.static_type == ir.IntType(1):
+            get_array_func = symbol_table["bool_array_get"]
+        elif isinstance(self.static_type, ir.PointerType) and \
+             self.static_type.pointee == ir.IntType(8):
+            get_array_func = symbol_table["string_array_get"]
         else:
-            array_pointer = base
-        data_ptr_field = builder.gep(array_pointer, [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), 1)])
-        data_ptr_raw = builder.load(data_ptr_field)
-        # Use element type from array literal node if available
-        elem_type = getattr(base_node, "elem_type", ir.IntType(64))
-        typed_data_ptr = builder.bitcast(data_ptr_raw, ir.PointerType(elem_type))
-        elem_ptr = builder.gep(typed_data_ptr, [index])
-        elem = builder.load(elem_ptr)
-        return elem
+            raise CodeGenError(f"Unsupported array element type for subscripting: {self.static_type}")
+
+        result = builder.call(get_array_func, [array_ptr, index])
+        value = builder.bitcast(result, self.static_type)
+        return value
 
 class ArrayLiteralNode(ASTNode):
     def __init__(self, token: Token):
         super().__init__(token)
-        self.elem_type = None
+        self.static_type = None
 
     def codegen(self, builder, module, symbol_table):
-        if len(self.children) == 0:
-            # Empty array, return null pointer
-            return ir.Constant(ir.PointerType(ir.IntType(8)), None)
+        if len(self.children) == 0 and self.static_type is None:
+            raise CodeGenError("Cannot infer type of empty array literal")
+        elif len(self.children) == 0:
+            # Empty array, return a null pointer
+            create_array_func = symbol_table["create_generic_array"]
+            return builder.call(create_array_func, [ir.Constant(self.static_type, 0)])
 
         # Generate code for each element
         elem_values = [child.codegen(builder, module, symbol_table) for child in self.children]
-        elem_types = [val.type for val in elem_values]
-        # Ensure all elements are of the same type
-        elem_type = elem_types[0]
-        all_strings = all([ASTNode.is_string_value(s) for s in elem_values])
-        all_same = all([t == elem_type for t in elem_types])
-        if not (all_same or all_strings):
-            raise CodeGenError("All elements in array must be of the same type")
+        elem_type = elem_values[0].type
+        self.static_type = elem_type  # Store for subscripting
 
-        # If all are strings change element type to all be the same pointer type
-        # Bitcast string values to pointer type for consistency
-        if all_strings:
-            elem_type = ir.PointerType(ir.ArrayType(ir.IntType(8), 0))
-            elem_values = [builder.bitcast(val, elem_type) for val in elem_values]
-            
-        self.elem_type = elem_type  # Store for subscripting
-        # Initial capacity (e.g., length of literal or a default value)
-        length = len(elem_values)
-        capacity = max(length, 8)  # Start with at least 8 slots, or use length
-
-        # Allocate the struct
-        vector_ptr = builder.alloca(vector_struct_ty)
-
-        # Allocate the data buffer
-        malloc_func = symbol_table.get("malloc")
-        # Use correct element size
-        if isinstance(elem_type, ir.IntType):
-            elem_size = ir.Constant(ir.IntType(64), elem_type.width // 8)
-        elif isinstance(elem_type, ir.FloatType):
-            elem_size = ir.Constant(ir.IntType(64), 4 if elem_type == ir.FloatType() else 8)
-        else:
-            elem_size = ir.Constant(ir.IntType(64), 8)
-        total_size = builder.mul(ir.Constant(ir.IntType(64), capacity), elem_size)
-        data_ptr_raw = builder.call(malloc_func, [total_size])
-        # Store as i8* in struct, but cast to correct type for element access
-        data_ptr = data_ptr_raw
-
-        # Set type tag
+        # Select the appropriate create and set functions based on element type
+        create_array_func = None
+        array_set_func = None
         if elem_type == ir.IntType(64):
-            type_tag = TYPE_INT
+            create_array_func = symbol_table["create_int_array"]
+            array_set_func = symbol_table["int_array_set"]
         elif elem_type == ir.FloatType():
-            type_tag = TYPE_FLOAT
+            create_array_func = symbol_table["create_float_array"]
+            array_set_func = symbol_table["float_array_set"]
         elif elem_type == ir.IntType(1):
-            type_tag = TYPE_BOOL
-        elif all_strings: # ASTNode.is_string_value(elem_values[0]):
-            type_tag = TYPE_STRING
+            create_array_func = symbol_table["create_bool_array"]
+            array_set_func = symbol_table["bool_array_set"]
+        elif isinstance(elem_type, ir.PointerType) and \
+             elem_type.pointee == ir.IntType(8):
+            create_array_func = symbol_table["create_string_array"]
+            array_set_func = symbol_table["string_array_set"]
         else:
             breakpoint()
-            raise CodeGenError("Unsupported element type for array")
+            raise CodeGenError(f"Unsupported array element type: {elem_type}")
 
-        # Store type tag
-        type_ptr = builder.gep(vector_ptr, [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), 0)])
-        builder.store(ir.Constant(ir.IntType(64), type_tag), type_ptr)
-
-        # Store data pointer (as i8*)
-        data_ptr_field = builder.gep(vector_ptr, [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), 1)])
-        builder.store(data_ptr, data_ptr_field)
-
-        # Store length
-        length_field = builder.gep(vector_ptr, [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), 2)])
-        builder.store(ir.Constant(ir.IntType(64), length), length_field)
-
-        # Store capacity
-        capacity_field = builder.gep(vector_ptr, [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), 3)])
-        builder.store(ir.Constant(ir.IntType(64), capacity), capacity_field)
-
-        # Store initial elements
-        typed_data_ptr = builder.bitcast(data_ptr, ir.PointerType(elem_type))
+        # Create the array
+        vector_struct_ptr = builder.call(create_array_func, [ir.Constant(ir.IntType(64), len(elem_values))])
+        # Initialize the array elements
         for i, val in enumerate(elem_values):
-            idx = ir.Constant(ir.IntType(64), i)
-            elem_ptr = builder.gep(typed_data_ptr, [idx])
-            builder.store(val, elem_ptr)
-
-        # Return the vector struct pointer
-        return vector_ptr
+            index = ir.Constant(ir.IntType(64), i)
+            casted_val = builder.bitcast(val, self.static_type)
+            builder.call(array_set_func, [vector_struct_ptr, index, casted_val])
+        
+        return vector_struct_ptr
 
 class StringNode(ASTNode):
     def __init__(self, token: Token):
@@ -228,7 +210,9 @@ class StringNode(ASTNode):
             idx = ir.Constant(ir.IntType(32), i)
             ptr = builder.gep(local_str, [ir.Constant(ir.IntType(32), 0), idx])
             builder.store(ir.Constant(ir.IntType(8), b), ptr)
-        return local_str
+        
+        return builder.bitcast(local_str, ir.PointerType(ir.IntType(8)))
+        # return local_str
 
 class BooleanNode(ASTNode):
     def __init__(self, token: Token, value: bool):
@@ -239,10 +223,14 @@ class BooleanNode(ASTNode):
         return ir.Constant(ir.IntType(1), 1 if self.value else 0)
 
 class IdentifierNode(ASTNode):
+    static_type: Literal[TokenType.TYPE_INT, TokenType.TYPE_FLOAT,
+                         TokenType.TYPE_STRING, TokenType.TYPE_BOOL,
+                         TokenType.TYPE_ARRAY, TokenType.TYPE_CALLABLE]
+    array_elem_type: ir.Type | None
+
     def __init__(self, token: Token):
         super().__init__(token)
-        self.callable_arg_types = []
-        self.callable_return_type = TokenType.TYPE_VOID
+        self.static_type = None
 
     def gentype(self) -> ir.Type:
         type = self._gentype_from_token(self.static_type)
@@ -261,8 +249,8 @@ class IdentifierNode(ASTNode):
             return var_addr
 
         # If the variable is a string/array return its pointer
-        if isinstance(var_addr.type, ir.types.PointerType) and \
-            isinstance(var_addr.type.pointee, ir.types.ArrayType):
+        if ASTNode.is_string_value(var_addr) or \
+            (isinstance(var_addr.type, ir.types.PointerType) and var_addr.type.pointee == vector_struct_ty):
             return var_addr
         # Only load if it's a pointer to a non-array type
         if isinstance(var_addr.type, ir.types.PointerType):
@@ -349,18 +337,19 @@ class FunctionCallNode(ASTNode):
         args = []
         for arg in self.children:
             val = arg.codegen(builder, module, symbol_table)
-            if isinstance(val, ir.Function):
-                pass
-            elif val.type == vector_struct_ty:
-                # Allocate space and store the struct, then pass the pointer
-                struct_ptr = builder.alloca(vector_struct_ty)
-                builder.store(val, struct_ptr)
-                val = struct_ptr
-            elif ASTNode.is_string_value(val):
-                val = builder.bitcast(val, ir.PointerType(ir.IntType(8)))
+            # if isinstance(val, ir.Function):
+            #     pass
+            # elif val.type == vector_struct_ty:
+            #     # Allocate space and store the struct, then pass the pointer
+            #     struct_ptr = builder.alloca(vector_struct_ty)
+            #     builder.store(val, struct_ptr)
+            #     val = struct_ptr
+            # elif ASTNode.is_string_value(val):
+            #     val = builder.bitcast(val, ir.PointerType(ir.IntType(8)))
 
             args.append(val)
         try:
+            _args = args
             return builder.call(func, args)
         except Exception as e:
             breakpoint()
@@ -532,31 +521,35 @@ class AssignNode(ASTNode):
         if node.token.type == TokenType.IDENTIFIER:
             var_addr = symbol_table.get(node.token.value)
             value = value_node.codegen(builder, module, symbol_table)
-        elif node.token.type == TokenType.LBRACK:  # Subscript assignment
+            builder.store(value, var_addr)
+        elif node.token.type == TokenType.LBRACK: # Subscript assignment
             subscript_node = node
             base_node = subscript_node.children[0]
             index_node = subscript_node.children[1]
-            base = base_node.codegen(builder, module, symbol_table)
+
+            # Generate code for the base array, index, and value
+            array_ptr = base_node.codegen(builder, module, symbol_table)
             index = index_node.codegen(builder, module, symbol_table)
             value = value_node.codegen(builder, module, symbol_table)
-            # Ensure we have a pointer to the struct
-            if isinstance(base.type, ir.LiteralStructType) and base.type == vector_struct_ty:
-                struct_ptr = builder.alloca(vector_struct_ty)
-                builder.store(base, struct_ptr)
-                array_pointer = struct_ptr
+            static_type = value.type
+
+            # Select the appropriate set function based on the static type
+            set_array_func = None
+            if static_type == ir.IntType(64):
+                set_array_func = symbol_table["int_array_set"]
+            elif static_type == ir.FloatType():
+                set_array_func = symbol_table["float_array_set"]
+            elif static_type == ir.IntType(1):
+                set_array_func = symbol_table["bool_array_set"]
+            elif ASTNode.is_string_value(static_type):
+                set_array_func = symbol_table["string_array_set"]
             else:
-                array_pointer = base
-            data_ptr_field = builder.gep(array_pointer, [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), 1)])
-            data_ptr_raw = builder.load(data_ptr_field)
-            # Use element type from array literal node if available
-            elem_type = getattr(base_node, "elem_type", ir.IntType(64))
-            typed_data_ptr = builder.bitcast(data_ptr_raw, ir.PointerType(elem_type))
-            elem_ptr = builder.gep(typed_data_ptr, [index])
-            var_addr = elem_ptr
+                raise CodeGenError(f"Unsupported array element type for assignment: {static_type}")
+
+            # Call the set function
+            builder.call(set_array_func, [array_ptr, index, value])
         else:
             raise CodeGenError("Invalid assignment target")
-        # TODO: Check types throw error if mismatch
-        builder.store(value, var_addr)
 
 
 class LetNode(ASTNode):
@@ -582,5 +575,22 @@ class LetNode(ASTNode):
         if value_node.token.type != TokenType.FUNCTION:
             var_addr.name = identifier_node.token.value
 
+        
+        # We need to determine the static type of the identifier
+        static_type = None
+        if value_node.token.type == TokenType.LBRACK:
+            identifier_node.static_type = TokenType.TYPE_ARRAY
+            identifier_node.array_elem_type = value_node.static_type
+            static_type = value_node.static_type
+        else:
+            try:
+                identifier_node.static_type = value_node.gentype()
+                static_type = identifier_node.static_type
+            except Exception as e:
+                pass
+            # if identifier_node.static_type is None:
+            #         raise CodeGenError("Unable to determine static type")
+        
         symbol_table[identifier_node.token.value] = var_addr
+        symbol_table[f"{identifier_node.token.value}_type"] = static_type
         return var_addr

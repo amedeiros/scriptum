@@ -68,6 +68,12 @@ let emprty_return = -> () {
 }
 emprty_return()
 
+# Print a string from a function
+let print_msg = -> (msg: str) {
+  printf("Message: %s\n", msg)
+}
+print_msg("Hello from Scriptum!")
+
 # Verify scoping and reassignment
 let expected = x
 if (expected == x) {
@@ -120,11 +126,11 @@ while (n > 0) {
 
 # Data structures
 let arr = [1, 2, 3, 4, 5]
-printf("Array size: %d\n", alen(arr))
-printf("Array Index 0: %d\n", arr[0])
+printf("Array size: %d\n", int_array_size(arr))
+printf("Array Index 0 should be 1: %d\n", arr[0])
 
 let pp_int_array = -> (arr: array[int]) {
-  let size_a = alen(arr)
+  let size_a = int_array_size(arr)
   let end_list = size_a - 1
   let n = 0
   printf("Array Contents: [")
@@ -146,5 +152,7 @@ arr[2] = 100
 printf("Array Index 2 after assignment should be 100: %d\n", arr[2])
 
 # Array litteral tests
-printf("Array Litteral Index 1 value should be 3.14: %.2f\n", [1.4, 3.14, 5.687][1])
+printf("Array Litteral Insdex 1 value should be 3.14: %.2f\n", [1.4, 3.14, 5.687][1])
+printf("Array Litteral Index 1 value should be 3: %d\n", [1, 3, 5][1])
+printf("Array Litteral Index 2 value should be true (1): %d\n", [true, false, true][2])
 printf("Array Litteral Index 0 value should be 'scriptum': %s\n", ["hello", "world", "from", "scriptum"][3])
