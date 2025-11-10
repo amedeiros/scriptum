@@ -65,6 +65,23 @@ extern "C" {
         }
         array->data.insert(array->data.begin() + index, value);
     }
+
+    int64_t int_array_index_of(IntArray* array, int64_t value) {
+        for (size_t i = 0; i < array->data.size(); ++i) {
+            if (array->data[i] == value) {
+                return i;
+            }
+        }
+        return -1;  // Not found
+    }
+
+    bool int_array_equals(IntArray* a, IntArray* b) {
+        if (a->data.size() != b->data.size()) return false;
+        for (size_t i = 0; i < a->data.size(); ++i) {
+            if (a->data[i] != b->data[i]) return false;
+        }
+        return true;
+    }
 }
 
 
@@ -130,6 +147,23 @@ extern "C" {
         }
         array->data.insert(array->data.begin() + index, value);
     }
+
+    int64_t float_array_index_of(FloatArray* array, float value) {
+        for (size_t i = 0; i < array->data.size(); ++i) {
+            if (array->data[i] == value) {
+                return i;
+            }
+        }
+        return -1;  // Not found
+    }
+
+    bool float_array_equals(FloatArray* a, FloatArray* b) {
+        if (a->data.size() != b->data.size()) return false;
+        for (size_t i = 0; i < a->data.size(); ++i) {
+            if (a->data[i] != b->data[i]) return false;
+        }
+        return true;
+    }
 }
 
 
@@ -194,6 +228,23 @@ extern "C" {
             throw std::out_of_range("Index out of bounds");
         }
         array->data.insert(array->data.begin() + index, value);
+    }
+
+    int64_t bool_array_index_of(BoolArray* array, bool value) {
+        for (size_t i = 0; i < array->data.size(); ++i) {
+            if (array->data[i] == value) {
+                return i;
+            }
+        }
+        return -1;  // Not found
+    }
+
+    bool bool_array_equals(BoolArray* a, BoolArray* b) {
+        if (a->data.size() != b->data.size()) return false;
+        for (size_t i = 0; i < a->data.size(); ++i) {
+            if (a->data[i] != b->data[i]) return false;
+        }
+        return true;
     }
 }
 
@@ -266,6 +317,24 @@ extern "C" {
         }
         array->data.insert(array->data.begin() + index, std::string(value));
     }
+
+    int64_t string_array_index_of(StringArray* array, const char* value) {
+        std::string val_str(value);
+        for (size_t i = 0; i < array->data.size(); ++i) {
+            if (array->data[i] == val_str) {
+                return i;
+            }
+        }
+        return -1;  // Not found
+    }
+
+    bool string_array_equals(StringArray* a, StringArray* b) {
+        if (a->data.size() != b->data.size()) return false;
+        for (size_t i = 0; i < a->data.size(); ++i) {
+            if (a->data[i] != b->data[i]) return false;
+        }
+        return true;
+    }
 }
 
 struct ArrayArray {
@@ -330,6 +399,66 @@ extern "C" {
         }
         array->data.insert(array->data.begin() + index, value);
     }
+
+    bool array_array_equals(ArrayArray* a, ArrayArray* b) {
+        if (a->data.size() != b->data.size()) return false;
+        for (size_t i = 0; i < a->data.size(); ++i) {
+            void* elem_a = a->data[i];
+            void* elem_b = b->data[i];
+            int64_t type_tag_a = *(int64_t*)elem_a;
+            int64_t type_tag_b = *(int64_t*)elem_b;
+            if (type_tag_a != type_tag_b) return false;
+            switch (type_tag_a) {
+                case 0: // IntArray
+                    if (!int_array_equals((IntArray*)elem_a, (IntArray*)elem_b)) return false;
+                    break;
+                case 1: // FloatArray
+                    if (!float_array_equals((FloatArray*)elem_a, (FloatArray*)elem_b)) return false;
+                    break;
+                case 2: // BoolArray
+                    if (!bool_array_equals((BoolArray*)elem_a, (BoolArray*)elem_b)) return false;
+                    break;
+                case 3: // StringArray
+                    if (!string_array_equals((StringArray*)elem_a, (StringArray*)elem_b)) return false;
+                    break;
+                case 4: // ArrayArray
+                    if (!array_array_equals((ArrayArray*)elem_a, (ArrayArray*)elem_b)) return false;
+                    break;
+                default:
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    int64_t array_array_index_of(ArrayArray* array, void* value) {
+        int64_t value_type_tag = *(int64_t*)value;
+        for (size_t i = 0; i < array->data.size(); ++i) {
+            void* elem = array->data[i];
+            int64_t elem_type_tag = *(int64_t*)elem;
+            if (elem_type_tag != value_type_tag) continue;
+            switch (elem_type_tag) {
+                case 0: // IntArray
+                    if (int_array_equals((IntArray*)elem, (IntArray*)value)) return i;
+                    break;
+                case 1: // FloatArray
+                    if (float_array_equals((FloatArray*)elem, (FloatArray*)value)) return i;
+                    break;
+                case 2: // BoolArray
+                    if (bool_array_equals((BoolArray*)elem, (BoolArray*)value)) return i;
+                    break;
+                case 3: // StringArray
+                    if (string_array_equals((StringArray*)elem, (StringArray*)value)) return i;
+                    break;
+                case 4: // ArrayArray
+                    if (array_array_equals((ArrayArray*)elem, (ArrayArray*)value)) return i;
+                    break;
+                default:
+                    break;
+            }
+        }
+        return -1;
+    }
 }
 
 
@@ -352,6 +481,69 @@ extern "C" {
                 return array_array_size((ArrayArray*)array_ptr);
             default:
                 throw std::invalid_argument("Unknown array type");
+        }
+    }
+
+    void pp_array(void* array_ptr) {
+        if (!array_ptr) {
+            std::cout << "Null array" << std::endl;
+            return;
+        }
+        int64_t type_tag = *(int64_t*)array_ptr;
+        switch (type_tag) {
+            case 0: {  // IntArray
+                IntArray* arr = (IntArray*)array_ptr;
+                std::cout << "[";
+                for (size_t i = 0; i < arr->data.size(); ++i) {
+                    std::cout << arr->data[i];
+                    if (i < arr->data.size() - 1) std::cout << ", ";
+                }
+                std::cout << "]" << std::endl;
+                break;
+            }
+            case 1: {  // FloatArray
+                FloatArray* arr = (FloatArray*)array_ptr;
+                std::cout << "[";
+                for (size_t i = 0; i < arr->data.size(); ++i) {
+                    std::cout << arr->data[i];
+                    if (i < arr->data.size() - 1) std::cout << ", ";
+                }
+                std::cout << "]" << std::endl;
+                break;
+            }
+            case 2: {  // BoolArray
+                BoolArray* arr = (BoolArray*)array_ptr;
+                std::cout << "[";
+                for (size_t i = 0; i < arr->data.size(); ++i) {
+                    std::cout << (arr->data[i] ? "true" : "false");
+                    if (i < arr->data.size() - 1) std::cout << ", ";
+                }
+                std::cout << "]" << std::endl;
+                break;
+            }
+            case 3: {  // StringArray
+                StringArray* arr = (StringArray*)array_ptr;
+                std::cout << "[";
+                for (size_t i = 0; i < arr->data.size(); ++i) {
+                    std::cout << "\"" << arr->data[i] << "\"";
+                    if (i < arr->data.size() - 1) std::cout << ", ";
+                }
+                std::cout << "]" << std::endl;
+                break;
+            }
+            case 4: {  // ArrayArray
+                ArrayArray* arr = (ArrayArray*)array_ptr;
+                std::cout << "[";
+                for (size_t i = 0; i < arr->data.size(); ++i) {
+                    // std::cout << arr->data[i];
+                    pp_array(arr->data[i]);  // Recursively print nested arrays
+                    if (i < arr->data.size() - 1) std::cout << ", ";
+                }
+                std::cout << "]" << std::endl;
+                break;
+            }
+            default:
+                std::cout << "Unknown array type" << std::endl;
         }
     }
 }

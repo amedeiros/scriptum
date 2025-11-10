@@ -53,6 +53,11 @@ def declare_alen(module, symbol_table):
     alen_fn = ir.Function(module, alen_ty, name="alen")
     symbol_table["alen"] = alen_fn
 
+def declare_pp_array(module, symbol_table):
+    pp_array_ty = ir.FunctionType(ir.VoidType(), [ir.PointerType(vector_struct_ty)])
+    pp_array_fn = ir.Function(module, pp_array_ty, name="pp_array")
+    symbol_table["pp_array"] = pp_array_fn
+
 def declare_array_functions(module, symbol_table):
     types = ["int", "float", "bool", "string", "array"]
     for data_type in types:
@@ -106,6 +111,11 @@ def declare_array_functions(module, symbol_table):
         array_insert = ir.Function(module, array_insert_ty, name=f"{data_type}_array_insert")
         symbol_table[f"{data_type}_array_insert"] = array_insert
 
+        # Declare <data_type>_array_index_of
+        array_index_of_ty = ir.FunctionType(ir.IntType(64), [ir.PointerType(vector_struct_ty), ret_type])
+        array_index_of = ir.Function(module, array_index_of_ty, name=f"{data_type}_array_index_of")
+        symbol_table[f"{data_type}_array_index_of"] = array_index_of
+
 
 def declare_builtins(module, symbol_table):
     declare_printf(module, symbol_table)
@@ -120,3 +130,4 @@ def declare_builtins(module, symbol_table):
     # Array functions
     declare_array_functions(module, symbol_table)
     declare_alen(module, symbol_table)
+    declare_pp_array(module, symbol_table)

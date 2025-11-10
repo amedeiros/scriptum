@@ -305,6 +305,8 @@ class Parser:
             expression = ArrayPopNode(function_identifier.token)
         elif function_identifier.token.value == "insert":
             expression = ArrayInsertNode(function_identifier.token)
+        elif function_identifier.token.value == "index_of":
+            expression = ArrayIndexOfNode(function_identifier.token)
         else:
             expression = FunctionCallNode(function_identifier.token)
 
