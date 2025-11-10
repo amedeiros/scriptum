@@ -484,6 +484,32 @@ extern "C" {
         }
     }
 
+    void clear_array(void* array_ptr) {
+        if (!array_ptr) {
+            throw std::invalid_argument("Null pointer provided");
+        }
+        int64_t type_tag = *(int64_t*)array_ptr;
+        switch (type_tag) {
+            case 0:  // IntArray
+                ((IntArray*)array_ptr)->data.clear();
+                break;
+            case 1:  // FloatArray
+                ((FloatArray*)array_ptr)->data.clear();
+                break;
+            case 2:  // BoolArray
+                ((BoolArray*)array_ptr)->data.clear();
+                break;
+            case 3:  // StringArray
+                ((StringArray*)array_ptr)->data.clear();
+                break;
+            case 4:  // ArrayArray
+                ((ArrayArray*)array_ptr)->data.clear();
+                break;
+            default:
+                throw std::invalid_argument("Unknown array type");
+        }
+    }
+
     void pp_array(void* array_ptr) {
         if (!array_ptr) {
             std::cout << "Null array" << std::endl;

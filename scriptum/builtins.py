@@ -58,6 +58,11 @@ def declare_pp_array(module, symbol_table):
     pp_array_fn = ir.Function(module, pp_array_ty, name="pp_array")
     symbol_table["pp_array"] = pp_array_fn
 
+def declare_array_clear(module, symbol_table):
+    array_clear_ty = ir.FunctionType(ir.VoidType(), [ir.PointerType(vector_struct_ty)])
+    array_clear_fn = ir.Function(module, array_clear_ty, name="clear_array")
+    symbol_table["clear"] = array_clear_fn
+
 def declare_array_functions(module, symbol_table):
     types = ["int", "float", "bool", "string", "array"]
     for data_type in types:
@@ -131,3 +136,4 @@ def declare_builtins(module, symbol_table):
     declare_array_functions(module, symbol_table)
     declare_alen(module, symbol_table)
     declare_pp_array(module, symbol_table)
+    declare_array_clear(module, symbol_table)
