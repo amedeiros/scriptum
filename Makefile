@@ -29,3 +29,6 @@ run:
 # Clean up build artifacts
 clean:
 	rm -rf $(BUILD_DIR) $(LIB_DIR) $(BIN_DIR)/*.ll $(BIN_DIR)/*.o $(BIN_DIR)/code
+
+test:
+	$(PYTHON) -m pytest tests

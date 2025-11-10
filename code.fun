@@ -174,3 +174,14 @@ append(bool_arr, true)
 printf("Bool array size after append should be 3: %d with value true (1): %d\n", alen(bool_arr), bool_arr[2])
 append(int_arr, 60)
 printf("Int array size after append should be 6: %d with value 60: %d\n", alen(int_arr), int_arr[5])
+
+# Array of arrays test
+let arr_of_arr = [[1,2,3], [4,5,6], [7,8,9]]
+printf("Array of Arrays size should be 3: %d\n", alen(arr_of_arr))
+printf("Array of Arrays first element size should be 3: %d\n", alen(arr_of_arr[0]))
+printf("Array of Arrays second array second element should be 4: %d\n", arr_of_arr[1][0])
+append(arr_of_arr, [10,11,12])
+printf("Array of Arrays size after append should be 4: %d\n", alen(arr_of_arr))
+printf("Array of Arrays new fourth array third element should be 12: %d\n", arr_of_arr[3][2])
+arr_of_arr[0][0] = 100
+printf("Array of Arrays first array first element after assignment should be 100: %d\n", arr_of_arr[0][0])

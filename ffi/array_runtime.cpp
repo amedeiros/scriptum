@@ -159,6 +159,44 @@ extern "C" {
     }
 }
 
+struct ArrayArray {
+    int64_t type_tag;  // 4 = array of arrays
+    std::vector<void*> data;  // Pointers to other arrays
+};
+
+extern "C" {
+    ArrayArray* create_array_array(int64_t initial_size) {
+        return new ArrayArray{4, std::vector<void*>(initial_size)};
+    }
+
+    void delete_array_array(ArrayArray* array) {
+        delete array;
+    }
+
+    void* array_array_get(ArrayArray* array, int64_t index) {
+        if (index < 0 || index >= array->data.size()) {
+            throw std::out_of_range("Index out of bounds");
+        }
+        return array->data[index];
+    }
+
+    void array_array_set(ArrayArray* array, int64_t index, void* value) {
+        if (index < 0 || index >= array->data.size()) {
+            throw std::out_of_range("Index out of bounds");
+        }
+        array->data[index] = value;
+    }
+
+    void array_array_push_back(ArrayArray* array, void* value) {
+        array->data.push_back(value);
+    }
+
+    // Get the size of the array
+    int64_t array_array_size(ArrayArray* array) {
+        return array->data.size();
+    }
+}
+
 
 extern "C" {
     int64_t alen(void* array_ptr) {
@@ -175,6 +213,8 @@ extern "C" {
                 return bool_array_size((BoolArray*)array_ptr);
             case 3:  // StringArray
                 return string_array_size((StringArray*)array_ptr);
+            case 4:  // ArrayArray
+                return array_array_size((ArrayArray*)array_ptr);
             default:
                 throw std::invalid_argument("Unknown array type");
         }

@@ -54,7 +54,7 @@ def declare_alen(module, symbol_table):
     symbol_table["alen"] = alen_fn
 
 def declare_array_functions(module, symbol_table):
-    types = ["int", "float", "bool", "string"]
+    types = ["int", "float", "bool", "string", "array"]
     for data_type in types:
         # Declare create_<data_type>_array
         create_array_ty = ir.FunctionType(ir.PointerType(vector_struct_ty), [ir.IntType(64)])
@@ -75,6 +75,8 @@ def declare_array_functions(module, symbol_table):
             ret_type = ir.IntType(1)
         elif data_type == "string":
             ret_type = ir.PointerType(ir.IntType(8))
+        elif data_type == "array":
+            ret_type = ir.PointerType(vector_struct_ty)
         array_get_ty = ir.FunctionType(ret_type, [ir.PointerType(vector_struct_ty), ir.IntType(64)])
         array_get = ir.Function(module, array_get_ty, name=f"{data_type}_array_get")
         symbol_table[f"{data_type}_array_get"] = array_get

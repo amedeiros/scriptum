@@ -130,9 +130,10 @@ class SubscriptNode(ASTNode):
             get_array_func = symbol_table["float_array_get"]
         elif self.static_type == ir.IntType(1):
             get_array_func = symbol_table["bool_array_get"]
-        elif isinstance(self.static_type, ir.PointerType) and \
-             self.static_type.pointee == ir.IntType(8):
+        elif ASTNode.is_string_value(self.static_type):
             get_array_func = symbol_table["string_array_get"]
+        elif self.static_type == ir.PointerType(vector_struct_ty):
+            get_array_func = symbol_table["array_array_get"]        
         else:
             raise CodeGenError(f"Unsupported array element type for subscripting: {self.static_type}")
 
@@ -170,12 +171,13 @@ class ArrayLiteralNode(ASTNode):
         elif elem_type == ir.IntType(1):
             create_array_func = symbol_table["create_bool_array"]
             array_set_func = symbol_table["bool_array_set"]
-        elif isinstance(elem_type, ir.PointerType) and \
-             elem_type.pointee == ir.IntType(8):
+        elif ASTNode.is_string_value(elem_type):
             create_array_func = symbol_table["create_string_array"]
             array_set_func = symbol_table["string_array_set"]
+        elif elem_type == ir.PointerType(vector_struct_ty):
+            create_array_func = symbol_table["create_array_array"]
+            array_set_func = symbol_table["array_array_set"]
         else:
-            breakpoint()
             raise CodeGenError(f"Unsupported array element type: {elem_type}")
 
         # Create the array
@@ -350,6 +352,8 @@ class AppendNode(ASTNode):
             append_func = symbol_table["float_array_push_back"]
         elif static_type == ir.IntType(1):
             append_func = symbol_table["bool_array_push_back"]
+        elif static_type == ir.PointerType(vector_struct_ty):
+            append_func = symbol_table["array_array_push_back"]
         elif ASTNode.is_string_value(static_type):
             append_func = symbol_table["string_array_push_back"]
         else:
