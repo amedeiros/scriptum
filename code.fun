@@ -218,6 +218,18 @@ printf("Index of 'three' in string_arr should be 1: %d\n", index_of(string_arr, 
 printf("Index of true (1) in bool_arr should be 1: %d\n", index_of(bool_arr, true))
 printf("Index of [4, 5, 6] in arr_of_arr should be 1: %d\n", index_of(arr_of_arr, [4, 5, 6]))
 
+# Test reverse
+reverse(int_arr)
+printf("After reverse, int_arr first element should be 50: %d\n", int_arr[0])
+reverse(float_arr)
+printf("After reverse, float_arr first element should be 4.4: %.2f\n", float_arr[0])
+reverse(string_arr)
+printf("After reverse, string_arr first element should be 'two_point_five': %s\n", string_arr[0])
+reverse(bool_arr)
+printf("After reverse, bool_arr first element should be true (1): %d\n", bool_arr[0])
+reverse(arr_of_arr)
+printf("After reverse, arr_of_arr first element first element should be 10: %d\n", arr_of_arr[0][0])
+
 # Test clear
 clear(int_arr)
 printf("After clear, int_arr size should be 0: %d\n", alen(int_arr))

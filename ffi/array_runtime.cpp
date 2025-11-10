@@ -484,6 +484,32 @@ extern "C" {
         }
     }
 
+    void reverse_array(void* array_ptr) {
+        if (!array_ptr) {
+            throw std::invalid_argument("Null pointer provided");
+        }
+        int64_t type_tag = *(int64_t*)array_ptr;
+        switch (type_tag) {
+            case 0:  // IntArray
+                std::reverse(((IntArray*)array_ptr)->data.begin(), ((IntArray*)array_ptr)->data.end());
+                break;
+            case 1:  // FloatArray
+                std::reverse(((FloatArray*)array_ptr)->data.begin(), ((FloatArray*)array_ptr)->data.end());
+                break;
+            case 2:  // BoolArray
+                std::reverse(((BoolArray*)array_ptr)->data.begin(), ((BoolArray*)array_ptr)->data.end());
+                break;
+            case 3:  // StringArray
+                std::reverse(((StringArray*)array_ptr)->data.begin(), ((StringArray*)array_ptr)->data.end());
+                break;
+            case 4:  // ArrayArray
+                std::reverse(((ArrayArray*)array_ptr)->data.begin(), ((ArrayArray*)array_ptr)->data.end());
+                break;
+            default:
+                throw std::invalid_argument("Unknown array type");
+        }
+    }
+
     void clear_array(void* array_ptr) {
         if (!array_ptr) {
             throw std::invalid_argument("Null pointer provided");
