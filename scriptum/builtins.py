@@ -68,6 +68,11 @@ def declare_array_reverse(module, symbol_table):
     array_reverse_fn = ir.Function(module, array_reverse_ty, name="reverse_array")
     symbol_table["reverse"] = array_reverse_fn
 
+def declare_array_sort(module, symbol_table):
+    array_sort_ty = ir.FunctionType(ir.VoidType(), [ir.PointerType(vector_struct_ty)])
+    array_sort_fn = ir.Function(module, array_sort_ty, name="sort_array")
+    symbol_table["sort"] = array_sort_fn
+
 def declare_array_functions(module, symbol_table):
     types = ["int", "float", "bool", "string", "array"]
     for data_type in types:
@@ -143,3 +148,4 @@ def declare_builtins(module, symbol_table):
     declare_pp_array(module, symbol_table)
     declare_array_clear(module, symbol_table)
     declare_array_reverse(module, symbol_table)
+    declare_array_sort(module, symbol_table)

@@ -230,6 +230,16 @@ printf("After reverse, bool_arr first element should be true (1): %d\n", bool_ar
 reverse(arr_of_arr)
 printf("After reverse, arr_of_arr first element first element should be 10: %d\n", arr_of_arr[0][0])
 
+# Test sort
+sort(int_arr)
+printf("After sort, int_arr first element should be 10: %d\n", int_arr[0])
+sort(float_arr)
+printf("After sort, float_arr first element should be 0.5: %.2f\n", float_arr[0])
+sort(string_arr)
+printf("After sort, string_arr first element should be 'one': %s\n", string_arr[0])
+sort(bool_arr)
+printf("After sort, bool_arr first element should be false (0): %d\n", bool_arr[0])
+
 # Test clear
 clear(int_arr)
 printf("After clear, int_arr size should be 0: %d\n", alen(int_arr))

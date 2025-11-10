@@ -510,6 +510,29 @@ extern "C" {
         }
     }
 
+    void sort_array(void* array_ptr) {
+        if (!array_ptr) {
+            throw std::invalid_argument("Null pointer provided");
+        }
+        int64_t type_tag = *(int64_t*)array_ptr;
+        switch (type_tag) {
+            case 0:  // IntArray
+                std::sort(((IntArray*)array_ptr)->data.begin(), ((IntArray*)array_ptr)->data.end());
+                break;
+            case 1:  // FloatArray
+                std::sort(((FloatArray*)array_ptr)->data.begin(), ((FloatArray*)array_ptr)->data.end());
+                break;
+            case 2:  // BoolArray
+                std::sort(((BoolArray*)array_ptr)->data.begin(), ((BoolArray*)array_ptr)->data.end());
+                break;
+            case 3:  // StringArray
+                std::sort(((StringArray*)array_ptr)->data.begin(), ((StringArray*)array_ptr)->data.end());
+                break;
+            default:
+                throw std::invalid_argument("Sorting not supported for this array type");
+        }
+    }   
+
     void clear_array(void* array_ptr) {
         if (!array_ptr) {
             throw std::invalid_argument("Null pointer provided");
