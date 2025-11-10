@@ -19,12 +19,6 @@ TYPE_BOOL = 2
 TYPE_STRING = 3
 TYPE_ARRAY = 4
 
-def load_array_type_tag(builder: IRBuilder, array_ptr: ir.Value) -> ir.Value:
-    type_tag_ptr = builder.gep(array_ptr, [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), 0)])
-    type_tag = builder.load(type_tag_ptr)
-    return type_tag
-
-
 class SymbolTable(dict[str, ir.Value]):
     def __init__(self, parent: "SymbolTable" = None):
         super().__init__()
@@ -89,20 +83,18 @@ class ASTNode(ABC):
     def is_string_value(val):
         return isinstance(val, ir.PointerType) and val.pointee == ir.IntType(8) or \
                 (hasattr(val, 'type') and isinstance(val.type, ir.PointerType) and val.type.pointee == ir.IntType(8))
-        # if hasattr(val, 'type'):
-        #     t = val.type
-        # else:
-        #     t = val
-
-        # return (
-        #     isinstance(t, ir.PointerType) and
-        #     isinstance(t.pointee, ir.ArrayType) and
-        #     t.pointee.element == ir.IntType(8)
-        # )
 
 class NumberNode(ASTNode):
     def __init__(self, token: Token):
         super().__init__(token)
+
+    def gentype(self) -> ir.Type:
+        if self.token.type == TokenType.INT:
+            return ir.IntType(64)
+        elif self.token.type == TokenType.FLOAT:
+            return ir.FloatType()
+
+        raise CodeGenError(f"Unknown number type {self.token.type}")
 
     def codegen(self, builder, module, symbol_table):
         if self.token.type == TokenType.INT:
@@ -200,6 +192,9 @@ class StringNode(ASTNode):
     def __init__(self, token: Token):
         super().__init__(token)
 
+    def gentype(self) -> ir.Type:
+        return ir.PointerType(ir.IntType(8))
+
     def codegen(self, builder, module, symbol_table):
         str_bytes = bytearray(self.token.value.encode("utf8")) + b"\00"
         str_type = ir.ArrayType(ir.IntType(8), len(str_bytes))
@@ -218,6 +213,9 @@ class BooleanNode(ASTNode):
     def __init__(self, token: Token, value: bool):
         super().__init__(token)
         self.value = value
+
+    def gentype(self) -> ir.Type:
+        return ir.IntType(1)
 
     def codegen(self, builder, module, symbol_table):
         return ir.Constant(ir.IntType(1), 1 if self.value else 0)
@@ -337,16 +335,6 @@ class FunctionCallNode(ASTNode):
         args = []
         for arg in self.children:
             val = arg.codegen(builder, module, symbol_table)
-            # if isinstance(val, ir.Function):
-            #     pass
-            # elif val.type == vector_struct_ty:
-            #     # Allocate space and store the struct, then pass the pointer
-            #     struct_ptr = builder.alloca(vector_struct_ty)
-            #     builder.store(val, struct_ptr)
-            #     val = struct_ptr
-            # elif ASTNode.is_string_value(val):
-            #     val = builder.bitcast(val, ir.PointerType(ir.IntType(8)))
-
             args.append(val)
         try:
             _args = args
@@ -575,22 +563,22 @@ class LetNode(ASTNode):
         if value_node.token.type != TokenType.FUNCTION:
             var_addr.name = identifier_node.token.value
 
-        
         # We need to determine the static type of the identifier
         static_type = None
         if value_node.token.type == TokenType.LBRACK:
             identifier_node.static_type = TokenType.TYPE_ARRAY
             identifier_node.array_elem_type = value_node.static_type
             static_type = value_node.static_type
+        elif value_node.token.type == TokenType.IDENTIFIER:
+            identifier_node.static_type = symbol_table.get(f"{value_node.token.value}_type")
+            static_type = identifier_node.static_type
         else:
             try:
                 identifier_node.static_type = value_node.gentype()
                 static_type = identifier_node.static_type
             except Exception as e:
                 pass
-            # if identifier_node.static_type is None:
-            #         raise CodeGenError("Unable to determine static type")
-        
+
         symbol_table[identifier_node.token.value] = var_addr
         symbol_table[f"{identifier_node.token.value}_type"] = static_type
         return var_addr
