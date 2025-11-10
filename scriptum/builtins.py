@@ -48,6 +48,11 @@ def declare_sizeof(module, symbol_table):
     sizeof_fn = ir.Function(module, sizeof_ty, name="sizeof")
     symbol_table["sizeof"] = sizeof_fn
 
+def declare_alen(module, symbol_table):
+    alen_ty = ir.FunctionType(ir.IntType(64), [ir.PointerType(vector_struct_ty)])
+    alen_fn = ir.Function(module, alen_ty, name="alen")
+    symbol_table["alen"] = alen_fn
+
 def declare_array_functions(module, symbol_table):
     types = ["int", "float", "bool", "string"]
     for data_type in types:
@@ -102,3 +107,4 @@ def declare_builtins(module, symbol_table):
     declare_sizeof(module, symbol_table)
     # Array functions
     declare_array_functions(module, symbol_table)
+    declare_alen(module, symbol_table)

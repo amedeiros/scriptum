@@ -142,3 +142,25 @@ extern "C" {
         return array->data.size();
     }
 }
+
+
+extern "C" {
+    int64_t alen(void* array_ptr) {
+        if (!array_ptr) {
+            throw std::invalid_argument("Null pointer provided");
+        }
+        int64_t type_tag = *(int64_t*)array_ptr;
+        switch (type_tag) {
+            case 0:  // IntArray
+                return int_array_size((IntArray*)array_ptr);
+            case 1:  // FloatArray
+                return float_array_size((FloatArray*)array_ptr);
+            case 2:  // BoolArray
+                return bool_array_size((BoolArray*)array_ptr);
+            case 3:  // StringArray
+                return string_array_size((StringArray*)array_ptr);
+            default:
+                throw std::invalid_argument("Unknown array type");
+        }
+    }
+}
