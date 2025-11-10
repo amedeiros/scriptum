@@ -1,9 +1,7 @@
 #include <vector>
-#include <variant>
 #include <string>
 #include <stdexcept>
 #include <iostream>
-#include <any>
 
 
 struct IntArray {
@@ -76,48 +74,14 @@ extern "C" {
 }
 
 
-struct StringArray {
-    int64_t type_tag;  // 2 = string
-    std::vector<std::string> data;
-};
-
-extern "C" {
-    StringArray* create_string_array(int64_t initial_size) {
-        return new StringArray{2, std::vector<std::string>(initial_size)};
-    }
-
-    void delete_string_array(StringArray* array) {
-        delete array;
-    }
-
-    const char* string_array_get(StringArray* array, int64_t index) {
-        if (index < 0 || index >= array->data.size()) {
-            throw std::out_of_range("Index out of bounds");
-        }
-        return array->data[index].c_str();
-    }
-
-    void string_array_set(StringArray* array, int64_t index, const char* value) {
-        if (index < 0 || index >= array->data.size()) {
-            throw std::out_of_range("Index out of bounds");
-        }
-        array->data[index] = std::string(value);
-    }
-
-    // Get the size of the array
-    int64_t string_array_size(StringArray* array) {
-        return array->data.size();
-    }
-}
-
 struct BoolArray {
-    int64_t type_tag;  // 3 = bool
+    int64_t type_tag;  // 2 = bool
     std::vector<bool> data;
 };
 
 extern "C" {
     BoolArray* create_bool_array(int64_t initial_size) {
-        return new BoolArray{3, std::vector<bool>(initial_size)};
+        return new BoolArray{2, std::vector<bool>(initial_size)};
     }
 
     void delete_bool_array(BoolArray* array) {
@@ -140,6 +104,41 @@ extern "C" {
 
     // Get the size of the array
     int64_t bool_array_size(BoolArray* array) {
+        return array->data.size();
+    }
+}
+
+
+struct StringArray {
+    int64_t type_tag;  // 3 = string
+    std::vector<std::string> data;
+};
+
+extern "C" {
+    StringArray* create_string_array(int64_t initial_size) {
+        return new StringArray{3, std::vector<std::string>(initial_size)};
+    }
+
+    void delete_string_array(StringArray* array) {
+        delete array;
+    }
+
+    const char* string_array_get(StringArray* array, int64_t index) {
+        if (index < 0 || index >= array->data.size()) {
+            throw std::out_of_range("Index out of bounds");
+        }
+        return array->data[index].c_str();
+    }
+
+    void string_array_set(StringArray* array, int64_t index, const char* value) {
+        if (index < 0 || index >= array->data.size()) {
+            throw std::out_of_range("Index out of bounds");
+        }
+        array->data[index] = std::string(value);
+    }
+
+    // Get the size of the array
+    int64_t string_array_size(StringArray* array) {
         return array->data.size();
     }
 }
