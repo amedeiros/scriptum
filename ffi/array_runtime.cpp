@@ -32,6 +32,10 @@ extern "C" {
         array->data[index] = value;
     }
 
+    void int_array_push_back(IntArray* array, int64_t value) {
+        array->data.push_back(value);
+    }
+
     // Get the size of the array
     int64_t int_array_size(IntArray* array) {
         return array->data.size();
@@ -65,6 +69,10 @@ extern "C" {
             throw std::out_of_range("Index out of bounds");
         }
         array->data[index] = value;
+    }
+
+    void float_array_push_back(FloatArray* array, float value) {
+        array->data.push_back(value);
     }
 
     // Get the size of the array
@@ -102,6 +110,10 @@ extern "C" {
         array->data[index] = value;
     }
 
+    void bool_array_push_back(BoolArray* array, bool value) {
+        array->data.push_back(value);
+    }
+
     // Get the size of the array
     int64_t bool_array_size(BoolArray* array) {
         return array->data.size();
@@ -135,6 +147,10 @@ extern "C" {
             throw std::out_of_range("Index out of bounds");
         }
         array->data[index] = std::string(value);
+    }
+
+    void string_array_push_back(StringArray* array, const char* value) {
+        array->data.push_back(std::string(value));
     }
 
     // Get the size of the array

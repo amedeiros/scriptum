@@ -1,6 +1,6 @@
 # type: ignore
 from llvmlite import ir
-from scriptum.ast import vector_struct_ty, TYPE_INT, TYPE_FLOAT, TYPE_BOOL
+from scriptum.ast import vector_struct_ty
 
 # Begin built-in printing functions
 def declare_printf(module, symbol_table):
@@ -88,11 +88,6 @@ def declare_array_functions(module, symbol_table):
         array_push_back_ty = ir.FunctionType(ir.VoidType(), [ir.PointerType(vector_struct_ty), ret_type])
         array_push_back = ir.Function(module, array_push_back_ty, name=f"{data_type}_array_push_back")
         symbol_table[f"{data_type}_array_push_back"] = array_push_back
-
-        # Declare <data_type>_array_size
-        array_size_ty = ir.FunctionType(ir.IntType(64), [ir.PointerType(vector_struct_ty)])
-        array_size = ir.Function(module, array_size_ty, name=f"{data_type}_array_size")
-        symbol_table[f"{data_type}_array_size"] = array_size
 
 
 def declare_builtins(module, symbol_table):

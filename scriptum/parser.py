@@ -296,8 +296,12 @@ class Parser:
         self._error(boolean_token, "expected TRUE or FALSE")
     
     def _parse_call_expression(self, function_identifier):
-        # In this case the current token is ( instead function_identifier is the what we want.
-        expression = FunctionCallNode(function_identifier.token)
+        # Compile time append function
+        if function_identifier.token.value == "append":
+            expression = AppendNode(function_identifier.token)
+        else:
+            expression = FunctionCallNode(function_identifier.token)
+
         expression.children = self._parse_call_arguments()
         return expression
     

@@ -324,6 +324,43 @@ class FunctionNode(ASTNode):
 
         return func
 
+class AppendNode(ASTNode):
+    def codegen(self, builder, module, symbol_table):
+        array_node = self.children[0]
+        value_node = self.children[1]
+        array_ptr = array_node.codegen(builder, module, symbol_table)
+        value = value_node.codegen(builder, module, symbol_table)
+
+        # We want the static type of the array elements not the value passed.
+        if array_node.token.type == TokenType.IDENTIFIER:
+            static_type = symbol_table.get(f"{array_node.token.value}_type")
+        else:
+            breakpoint()
+            static_type = array_node.children[0].gentype()
+
+        if static_type is None:
+            breakpoint()
+            raise CodeGenError(f"Cannot determine static type of array for append: {array_node.token.value}")
+
+        append_func = None
+        # static_type = value.type
+        if static_type == ir.IntType(64):
+            append_func = symbol_table["int_array_push_back"]
+        elif static_type == ir.FloatType():
+            append_func = symbol_table["float_array_push_back"]
+        elif static_type == ir.IntType(1):
+            append_func = symbol_table["bool_array_push_back"]
+        elif ASTNode.is_string_value(static_type):
+            append_func = symbol_table["string_array_push_back"]
+        else:
+            raise CodeGenError(f"Unsupported array element type for append: {static_type}")
+
+        # Validate arg matches
+        if value.type != static_type:
+            raise CodeGenError(f"Type mismatch in append: array element type {static_type} vs value type {value.type}")
+
+        builder.call(append_func, [array_ptr, value])
+
 class FunctionCallNode(ASTNode):
     def __init__(self, token: Token):
         super().__init__(token)

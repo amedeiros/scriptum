@@ -165,3 +165,12 @@ let bool_arr = [true, false]
 printf("Bool array size should be 2: %d\n", alen(bool_arr))
 let int_arr = [10, 20, 30, 40, 50]
 printf("Int array size should be 5: %d\n", alen(int_arr))
+
+append(float_arr, 5.5)
+printf("Float array size after append should be 5: %d with value 5.5: %.2f\n", alen(float_arr), float_arr[4])
+append(string_arr, "four")
+printf("String array size after append should be 4: %d with value 'four': %s\n", alen(string_arr), string_arr[3])
+append(bool_arr, true)
+printf("Bool array size after append should be 3: %d with value true (1): %d\n", alen(bool_arr), bool_arr[2])
+append(int_arr, 60)
+printf("Int array size after append should be 6: %d with value 60: %d\n", alen(int_arr), int_arr[5])
