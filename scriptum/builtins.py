@@ -91,6 +91,16 @@ def declare_array_functions(module, symbol_table):
         array_push_back = ir.Function(module, array_push_back_ty, name=f"{data_type}_array_push_back")
         symbol_table[f"{data_type}_array_push_back"] = array_push_back
 
+        # Declare <data_type>_array_remove
+        array_remove_ty = ir.FunctionType(ret_type, [ir.PointerType(vector_struct_ty), ir.IntType(64)])
+        array_remove = ir.Function(module, array_remove_ty, name=f"{data_type}_array_remove")
+        symbol_table[f"{data_type}_array_remove"] = array_remove
+
+        # Declare <data_type>_array_pop
+        array_pop_ty = ir.FunctionType(ret_type, [ir.PointerType(vector_struct_ty)])
+        array_pop = ir.Function(module, array_pop_ty, name=f"{data_type}_array_pop")
+        symbol_table[f"{data_type}_array_pop"] = array_pop
+
 
 def declare_builtins(module, symbol_table):
     declare_printf(module, symbol_table)

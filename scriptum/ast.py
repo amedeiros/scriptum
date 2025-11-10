@@ -325,6 +325,68 @@ class FunctionNode(ASTNode):
             func_builder.ret_void()
 
         return func
+    
+class ArrayRemoveNode(ASTNode):
+    def codegen(self, builder: IRBuilder, module: Module, symbol_table: dict[str, any]):
+        array_node = self.children[0]
+        index_node = self.children[1]
+        array_ptr = array_node.codegen(builder, module, symbol_table)
+        index = index_node.codegen(builder, module, symbol_table)
+
+        # We want the static type of the array elements not the value passed.
+        if array_node.token.type == TokenType.IDENTIFIER:
+            static_type = symbol_table.get(f"{array_node.token.value}_type")
+        else:
+            static_type = array_node.static_type
+
+        if static_type is None:
+            raise CodeGenError(f"Cannot determine static type of array for append: {array_node.token.value}")
+        
+        remove_func = None
+        if static_type == ir.IntType(64):
+            remove_func = symbol_table["int_array_remove"]
+        elif static_type == ir.FloatType():
+            remove_func = symbol_table["float_array_remove"]
+        elif static_type == ir.IntType(1):
+            remove_func = symbol_table["bool_array_remove"]
+        elif static_type == ir.PointerType(vector_struct_ty):
+            remove_func = symbol_table["array_array_remove"]
+        elif ASTNode.is_string_value(static_type):
+            remove_func = symbol_table["string_array_remove"]
+        else:
+            raise CodeGenError(f"Unsupported array element type for remove: {static_type}")
+        
+        return builder.call(remove_func, [array_ptr, index])
+
+class ArrayPopNode(ASTNode):
+    def codegen(self, builder: IRBuilder, module: Module, symbol_table: dict[str, any]):
+        array_node = self.children[0]
+        array_ptr = array_node.codegen(builder, module, symbol_table)
+
+        # We want the static type of the array elements not the value passed.
+        if array_node.token.type == TokenType.IDENTIFIER:
+            static_type = symbol_table.get(f"{array_node.token.value}_type")
+        else:
+            static_type = array_node.static_type
+
+        if static_type is None:
+            raise CodeGenError(f"Cannot determine static type of array for pop: {array_node.token.value}")
+        
+        pop_func = None
+        if static_type == ir.IntType(64):
+            pop_func = symbol_table["int_array_pop"]
+        elif static_type == ir.FloatType():
+            pop_func = symbol_table["float_array_pop"]
+        elif static_type == ir.IntType(1):
+            pop_func = symbol_table["bool_array_pop"]
+        elif static_type == ir.PointerType(vector_struct_ty):
+            pop_func = symbol_table["array_array_pop"]
+        elif ASTNode.is_string_value(static_type):
+            pop_func = symbol_table["string_array_pop"]
+        else:
+            raise CodeGenError(f"Unsupported array element type for pop: {static_type}")
+        
+        return builder.call(pop_func, [array_ptr])
 
 class AppendNode(ASTNode):
     def codegen(self, builder, module, symbol_table):
@@ -337,15 +399,12 @@ class AppendNode(ASTNode):
         if array_node.token.type == TokenType.IDENTIFIER:
             static_type = symbol_table.get(f"{array_node.token.value}_type")
         else:
-            breakpoint()
-            static_type = array_node.children[0].gentype()
+            static_type = array_node.static_type
 
         if static_type is None:
-            breakpoint()
             raise CodeGenError(f"Cannot determine static type of array for append: {array_node.token.value}")
 
         append_func = None
-        # static_type = value.type
         if static_type == ir.IntType(64):
             append_func = symbol_table["int_array_push_back"]
         elif static_type == ir.FloatType():

@@ -185,3 +185,15 @@ printf("Array of Arrays size after append should be 4: %d\n", alen(arr_of_arr))
 printf("Array of Arrays new fourth array third element should be 12: %d\n", arr_of_arr[3][2])
 arr_of_arr[0][0] = 100
 printf("Array of Arrays first array first element after assignment should be 100: %d\n", arr_of_arr[0][0])
+
+# Test remove
+printf("Removed element at index 2 should be 30: %d\n", remove(int_arr, 2))
+printf("Removed element at index 0 should be 1.1: %.2f\n", remove(float_arr, 0))
+printf("Removed element at index 1 should be 'two': %s\n", remove(string_arr, 1))
+printf("Removed element at index 0 should be true (1): %d\n", remove(bool_arr, 0))
+
+# Test pop
+printf("Pop element should be 60: %d\n", pop(int_arr))
+printf("Pop element should be 5.5: %.2f\n", pop(float_arr))
+printf("Pop element should be 'four': %s\n", pop(string_arr))
+printf("Pop element should be true (1): %d\n", pop(bool_arr))

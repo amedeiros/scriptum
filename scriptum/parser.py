@@ -299,6 +299,10 @@ class Parser:
         # Compile time append function
         if function_identifier.token.value == "append":
             expression = AppendNode(function_identifier.token)
+        elif function_identifier.token.value == "remove":
+            expression = ArrayRemoveNode(function_identifier.token)
+        elif function_identifier.token.value == "pop":
+            expression = ArrayPopNode(function_identifier.token)
         else:
             expression = FunctionCallNode(function_identifier.token)
 

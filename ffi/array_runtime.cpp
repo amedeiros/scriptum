@@ -40,6 +40,24 @@ extern "C" {
     int64_t int_array_size(IntArray* array) {
         return array->data.size();
     }
+
+    int64_t int_array_remove(IntArray* array, int64_t index) {
+        if (index < 0 || index >= array->data.size()) {
+            throw std::out_of_range("Index out of bounds");
+        }
+        int64_t removed = array->data[index];
+        array->data.erase(array->data.begin() + index);
+        return removed;
+    }
+
+    int64_t int_array_pop(IntArray* array) {
+        if (array->data.empty()) {
+            throw std::out_of_range("Array is empty");
+        }
+        int64_t removed = array->data.back();
+        array->data.pop_back();
+        return removed;
+    }
 }
 
 
@@ -78,6 +96,25 @@ extern "C" {
     // Get the size of the array
     int64_t float_array_size(FloatArray* array) {
         return array->data.size();
+    }
+
+    float float_array_remove(FloatArray* array, int64_t index) {
+        if (index < 0 || index >= array->data.size()) {
+            throw std::out_of_range("Index out of bounds");
+        }
+
+        float removed = array->data[index];
+        array->data.erase(array->data.begin() + index);
+        return removed;
+    }
+
+    float float_array_pop(FloatArray* array) {
+        if (array->data.empty()) {
+            throw std::out_of_range("Array is empty");
+        }
+        float removed = array->data.back();
+        array->data.pop_back();
+        return removed;
     }
 }
 
@@ -118,6 +155,25 @@ extern "C" {
     int64_t bool_array_size(BoolArray* array) {
         return array->data.size();
     }
+
+    bool bool_array_remove(BoolArray* array, int64_t index) {
+        if (index < 0 || index >= array->data.size()) {
+            throw std::out_of_range("Index out of bounds");
+        }
+
+        bool removed = array->data[index];
+        array->data.erase(array->data.begin() + index);
+        return removed;
+    }
+
+    bool bool_array_pop(BoolArray* array) {
+        if (array->data.empty()) {
+            throw std::out_of_range("Array is empty");
+        }
+        bool removed = array->data.back();
+        array->data.pop_back();
+        return removed;
+    }
 }
 
 
@@ -157,6 +213,31 @@ extern "C" {
     int64_t string_array_size(StringArray* array) {
         return array->data.size();
     }
+
+    const char* string_array_remove(StringArray* array, int64_t index) {
+        if (index < 0 || index >= array->data.size()) {
+            throw std::out_of_range("Index out of bounds");
+        }
+
+        std::string removed = array->data[index];
+        array->data.erase(array->data.begin() + index);
+        // Return a copy of the removed string
+        char* ret = new char[removed.size() + 1];
+        std::strcpy(ret, removed.c_str());
+        return ret;
+    }
+
+    const char* string_array_pop(StringArray* array) {
+        if (array->data.empty()) {
+            throw std::out_of_range("Array is empty");
+        }
+        std::string removed = array->data.back();
+        array->data.pop_back();
+        // Return a copy of the removed string
+        char* ret = new char[removed.size() + 1];
+        std::strcpy(ret, removed.c_str());
+        return ret;
+    }
 }
 
 struct ArrayArray {
@@ -194,6 +275,25 @@ extern "C" {
     // Get the size of the array
     int64_t array_array_size(ArrayArray* array) {
         return array->data.size();
+    }
+
+    void* array_array_remove(ArrayArray* array, int64_t index) {
+        if (index < 0 || index >= array->data.size()) {
+            throw std::out_of_range("Index out of bounds");
+        }
+
+        auto* removed = array->data[index];
+        array->data.erase(array->data.begin() + index);
+        return removed;
+    }
+
+    void* array_array_pop(ArrayArray* array) {
+        if (array->data.empty()) {
+            throw std::out_of_range("Array is empty");
+        }
+        void* removed = array->data.back();
+        array->data.pop_back();
+        return removed;
     }
 }
 
