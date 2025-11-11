@@ -1,66 +1,87 @@
 # type: ignore
 import sys
 import os
+import glob
 from llvmlite import binding, ir
 from llvmlite.binding import PassManagerBuilder, ModulePassManager
-from scriptum.lexer import Lexer
+from scriptum.lexer import Lexer, TokenType
 from scriptum.parser import Parser
 from scriptum.ast import SymbolTable
 import scriptum.builtins as builtins
 
-CODE = open("code.fun").read()
 
-def repl():
-    while True:
-        code = input(">>> ")
-        if code == "exit":
-            break
-        module = build_module(code)
-        execute_module(module)
+class Importer:
+    def __init__(self, module_cache: dict):
+        self.module_cache = module_cache
 
-def optimize_module(module):
-    """
-    Optimize the given LLVM module using llvmlite's optimization passes.
-    """
-    # Initialize the LLVM target and pass manager
-    binding.initialize()
-    binding.initialize_native_target()
-    binding.initialize_native_asmprinter()
+    def import_module(self, module_name: str):
+        if module_name in self.module_cache:
+            return self.module_cache[module_name]
+        symbol_table = SymbolTable()
+        imported_module = compile_file(module_name + ".fun", self, symbol_table)
+        write_file(imported_module, module_name, extension = ".ll", root_dir = "./bin/")
+        self.module_cache[module_name] = (imported_module, symbol_table)
+        return imported_module, symbol_table
 
-    # Create a PassManagerBuilder and set optimization level
-    pmb = PassManagerBuilder()
-    pmb.opt_level = 3  # Set optimization level (0-3, where 3 is the highest)
+def write_file(data, filename, extension, root_dir = "./bin/") -> str:
+    data_file = root_dir + filename + extension
+    with open(data_file, "w") as f:
+        f.write(str(data))
+    
+    return data_file
 
-    # Create a PassManager and populate it with passes
-    pm = ModulePassManager()
-    pmb.populate(pm)
+# def compile_file(file_name, module_cache: dict, symbol_table: SymbolTable, is_main: bool = False):
+def compile_file(file_name, importer: Importer, symbol_table: SymbolTable, is_main: bool = False):
+    # Read source code from file
+    with open(file_name, "r") as f:
+        code = f.read()
 
-    # Run the optimization passes on the module
-    llvm_module = binding.parse_assembly(str(module))
-    pm.run(llvm_module)
-
-    # Return the optimized module as a string
-    return llvm_module
-
-def build_module(code=CODE):
+    # Lex and parse the source code
     lexer = Lexer(code)
     parser = Parser(lexer)
     ast = parser.parse()
-    module = ir.Module(name="my_module")
-    # Set the target triple to the host's triple
+
+    # Create LLVM module and symbol table
+    module = ir.Module(name=file_name)
     module.triple = binding.get_default_triple()
-    builder = ir.IRBuilder()
-    symbol_table = SymbolTable()
-    # Declare built-in functions
+    module_builder = ir.IRBuilder()
+
+    # Compile the builtins to every module so they are available
     builtins.declare_builtins(module, symbol_table)
 
+    # Define the wrapper function name for loose statements
+    if is_main:
+        wrap_block_name = "main"
+    else:
+        wrap_block_name = f"__init__{module.name}"
+
+    # Create wrap function and entry block
     func_type = ir.FunctionType(ir.VoidType(), [])
-    main_func = ir.Function(module, func_type, name="main")
-    block = main_func.append_basic_block(name="entry")
-    builder = ir.IRBuilder(block)
+    wrap_func = ir.Function(module, func_type, name=wrap_block_name)
+    block = wrap_func.append_basic_block(name="entry")
+    wrap_builder = ir.IRBuilder(block)
     for node in ast:
-        node.codegen(builder, module, symbol_table)
-    builder.ret_void()
+        # Handle imports module level
+        if node.token.type == TokenType.IMPORT:
+            for module_ident_node in node.children:
+                if module_ident_node.token.type != TokenType.IDENTIFIER:
+                    raise Exception("Invalid module name in import statement")
+                module_name = module_ident_node.token.value
+                imported_module, symbols = importer.import_module(module_name)
+                for func in imported_module.functions:
+                    if func.name not in module.globals:
+                        ir.Function(module, func.function_type, name=func.name)
+                symbol_table.update(symbols)
+        elif node.token.type == TokenType.FROM:
+            breakpoint()
+        elif node.token.type == TokenType.LET and node.children[0].token.type == TokenType.FUNCTION:
+            # Function definition at module level
+            node.codegen(module_builder, module, symbol_table)
+        else: # Wrap loose statements in wrap_block_name function
+            node.codegen(wrap_builder, module, symbol_table)
+    
+    wrap_builder.ret_void()
+    module_cache[file_name] = module
     return module
 
 if __name__ == "__main__":
@@ -75,30 +96,40 @@ if __name__ == "__main__":
         code = f.read()
 
     # Build LLVM module
-    module = build_module(code)
-
-    # Optimize the module
-    optimized_module = optimize_module(module)
-    # optomized_module = module  # Skip optimization for now
+    module_cache = {}
+    symbol_table = SymbolTable()
+    importer = Importer(module_cache)
+    optimized_module = compile_file(source_file, importer, symbol_table, is_main=True)
 
     # Write LLVM IR to file
     root_dir = "./bin/"
-    root_file = source_file.rsplit(".", 1)[0]
-    llvm_instructions = root_dir + root_file + ".ll"
-    with open(llvm_instructions, "w") as f:
-        f.write(str(module))
-    print(f"LLVM IR written to {llvm_instructions}")
+    main_file = source_file.rsplit(".", 1)[0]
+    instructions_file = write_file(optimized_module, main_file, extension = ".ll", root_dir = root_dir)
+    print(f"LLVM IR written to {instructions_file}")
 
     # Write object file and executable
-    obj_file = root_dir + root_file + ".o"
-    executable_file = root_dir + root_file
     runtime_lib_path = "./ffi/lib"  # Path to the runtime library
     runtime_lib_name = "scriptum_runtime"  # Name of the runtime library (without the 'lib' prefix)
 
-    # Compile LLVM IR to object file
-    os.system(f"llc -filetype=obj {llvm_instructions} -o {obj_file}")
+    # Collect all .ll files in the root directory
+    ll_files = glob.glob(os.path.join(root_dir, "*.ll"))
+    linked_ll_file = os.path.join(root_dir, "linked.ll")
+    obj_file = os.path.join(root_dir, "linked.o")
+    executable_file = os.path.join(root_dir, main_file)
+
+    # Link all .ll files into one
+    os.system(f"llvm-link {' '.join(ll_files)} -o {linked_ll_file}")
+    print(f"Linked LLVM IR written to {linked_ll_file}")
+
+    # Optimize the linked LLVM IR
+    linked_opt_ll_file = os.path.join(root_dir, "linked_opt.ll")
+    os.system(f"opt -O3 {linked_ll_file} -o {linked_opt_ll_file}")
+    print(f"Optimized LLVM IR written to {linked_opt_ll_file}")
+
+    # Compile linked .ll to object file
+    os.system(f"llc -filetype=obj {linked_opt_ll_file} -o {obj_file}")
     print(f"Object file written to {obj_file}")
 
-    # Link object file with the runtime library to create the executable
+    # Link object file with the runtime library to create executable
     os.system(f"clang {obj_file} -L{runtime_lib_path} -l{runtime_lib_name} -o {executable_file}")
     print(f"Executable written to {executable_file}")

@@ -264,3 +264,7 @@ printf("Replicated bool array index 4 should be false (0): %d\n", replicated_boo
 let replicated_arr_of_arr = [[0]] * 2
 printf("Replicated array of arrays size should be 2: %d\n", alen(replicated_arr_of_arr))
 printf("Replicated array of arrays index 1 index 0 should be 0: %d\n", replicated_arr_of_arr[1][0])
+
+# Test imports
+import other_module
+hello_world()
