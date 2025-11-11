@@ -1,13 +1,3 @@
-# let strcat = -> (left, right) {
-#   let left_len = strlen(left)
-#   let right_len = strlen(right)
-#   let total_len = left_len + right_len + 1
-#   let result = malloc(total_len)
-#   strcpy(result, left)
-#   strcpy(result + left_len, right)
-#   return result
-# }
-
 # Test some basics
 let one = 1
 let floating = 10.019
