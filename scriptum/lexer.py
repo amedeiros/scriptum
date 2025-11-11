@@ -61,6 +61,11 @@ class TokenType(enum.Enum):
     TYPE_VOID   = "TYPE_VOID"
     TYPE_CALLABLE = "TYPE_CALLABLE"
 
+    # Importing
+    IMPORT = "IMPORT"
+    FROM   = "FROM"
+    AS     = "AS"
+
 EOF      = "\0"
 KEYWORDS = {
     "if":     TokenType.IF,
@@ -79,6 +84,9 @@ KEYWORDS = {
     "array":  TokenType.TYPE_ARRAY,
     "void":   TokenType.TYPE_VOID,
     "callable": TokenType.TYPE_CALLABLE,
+    "import": TokenType.IMPORT,
+    "from":   TokenType.FROM,
+    "as":     TokenType.AS,
 }
 
 

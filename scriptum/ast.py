@@ -781,3 +781,26 @@ class LetNode(ASTNode):
         symbol_table[identifier_node.token.value] = var_addr
         symbol_table[f"{identifier_node.token.value}_type"] = static_type
         return var_addr
+
+class ModuleIdentifierNode(ASTNode):
+    def __init__(self, token: Token, module_as_name: Token | None = None):
+        super().__init__(token)
+        self.module_as_name = module_as_name
+
+    def codegen(self, builder, module, symbol_table):
+        # Module identifiers are handled at a higher level; nothing to do here.
+        pass
+
+class FromImportNode(ASTNode):
+    def __init__(self, token: Token, module_name: Token):
+        super().__init__(token)
+        self.module_name = module_name
+
+    def codegen(self, builder, module, symbol_table):
+        # Module identifiers are handled at a higher level; nothing to do here.
+        pass
+
+class ImportNode(ASTNode):
+    def codegen(self, builder, module, symbol_table):
+        # Imports are handled at a higher level; nothing to do here.
+        pass
