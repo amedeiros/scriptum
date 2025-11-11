@@ -123,7 +123,12 @@ class Parser:
         return subscript
 
     def _parse_infix_expression(self, left: ASTNode) -> BinaryOpNode:
-        expression = BinaryOpNode(self.current_token)
+        # Array replication syntax
+        if self.current_token.type == TokenType.STAR and left.token.type == TokenType.LBRACK:
+            expression = ArrayReplicationNode(left.token)
+        else:
+            expression = BinaryOpNode(self.current_token)
+
         expression.add_child(left)
         precedence = self._cur_precedence()
         self._advance()
@@ -269,6 +274,13 @@ class Parser:
             if not self._check(TokenType.RBRACK):
                 self._consume(TokenType.COMMA)
         self._consume(TokenType.RBRACK)
+        # Infer static type if possible
+        if len(array.children) > 0:
+            if isinstance(array.children[0], ArrayLiteralNode):
+                array.static_type = ir.PointerType(vector_struct_ty)
+            elif not isinstance(array.children[0], IdentifierNode):
+                array.static_type = array.children[0].gentype()
+
         return array
 
     def _parse_int(self) -> NumberNode:
@@ -296,8 +308,20 @@ class Parser:
         self._error(boolean_token, "expected TRUE or FALSE")
     
     def _parse_call_expression(self, function_identifier):
-        # In this case the current token is ( instead function_identifier is the what we want.
-        expression = FunctionCallNode(function_identifier.token)
+        # Compile time append function
+        if function_identifier.token.value == "append":
+            expression = AppendNode(function_identifier.token)
+        elif function_identifier.token.value == "remove":
+            expression = ArrayRemoveNode(function_identifier.token)
+        elif function_identifier.token.value == "pop":
+            expression = ArrayPopNode(function_identifier.token)
+        elif function_identifier.token.value == "insert":
+            expression = ArrayInsertNode(function_identifier.token)
+        elif function_identifier.token.value == "index_of":
+            expression = ArrayIndexOfNode(function_identifier.token)
+        else:
+            expression = FunctionCallNode(function_identifier.token)
+
         expression.children = self._parse_call_arguments()
         return expression
     

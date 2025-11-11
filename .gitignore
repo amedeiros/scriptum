@@ -3,3 +3,6 @@ __pycache__/
 .ruff_cache/
 .vscode/
 bin/
+
+ffi/build/
+ffi/lib/

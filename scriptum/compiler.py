@@ -79,6 +79,7 @@ if __name__ == "__main__":
 
     # Optimize the module
     optimized_module = optimize_module(module)
+    # optomized_module = module  # Skip optimization for now
 
     # Write LLVM IR to file
     root_dir = "./bin/"
@@ -91,7 +92,13 @@ if __name__ == "__main__":
     # Write object file and executable
     obj_file = root_dir + root_file + ".o"
     executable_file = root_dir + root_file
+    runtime_lib_path = "./ffi/lib"  # Path to the runtime library
+    runtime_lib_name = "scriptum_runtime"  # Name of the runtime library (without the 'lib' prefix)
+
+    # Compile LLVM IR to object file
     os.system(f"llc -filetype=obj {llvm_instructions} -o {obj_file}")
     print(f"Object file written to {obj_file}")
-    os.system(f"clang {obj_file} -o {executable_file}")
+
+    # Link object file with the runtime library to create the executable
+    os.system(f"clang {obj_file} -L{runtime_lib_path} -l{runtime_lib_name} -o {executable_file}")
     print(f"Executable written to {executable_file}")
