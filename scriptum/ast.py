@@ -70,7 +70,7 @@ class ASTNode(ABC):
             return ir.IntType(1)
         elif static_type == TokenType.TYPE_ARRAY:
             return ir.PointerType(vector_struct_ty)
-        elif self.static_return_type == TokenType.TYPE_VOID:
+        elif static_type == TokenType.TYPE_VOID:
             return ir.VoidType()
         
         return None
@@ -140,6 +140,39 @@ class SubscriptNode(ASTNode):
         result = builder.call(get_array_func, [array_ptr, index])
         value = builder.bitcast(result, self.static_type)
         return value
+
+class ArrayReplicationNode(ASTNode):
+    static_type: ir.Type
+
+    def codegen(self, builder, module, symbol_table):
+        array_node = self.children[0]
+        count_node = self.children[1]
+
+        # Generate value and count for array replication
+        count = count_node.codegen(builder, module, symbol_table)
+        val = array_node.children[0].codegen(builder, module, symbol_table)
+
+        # Determine the static type of the array elements
+        self.static_type = val.type
+        # Select the appropriate create and set functions based on element type
+        create_array_func = None
+        if self.static_type == ir.IntType(64):
+            create_array_func = symbol_table["create_int_array_from_value"]
+        elif self.static_type == ir.FloatType():
+            create_array_func = symbol_table["create_float_array_from_value"]
+        elif self.static_type == ir.IntType(1):
+            create_array_func = symbol_table["create_bool_array_from_value"]
+        elif ASTNode.is_string_value(self.static_type):
+            create_array_func = symbol_table["create_string_array_from_value"]
+        elif self.static_type == ir.PointerType(vector_struct_ty):
+            create_array_func = symbol_table["create_array_array_from_value"]
+        else:
+            raise CodeGenError(f"Unsupported array element type for replication: {self.static_type}")
+
+        # Create the new replicated array
+        vector_struct_ptr = builder.call(create_array_func, [val, count])
+        
+        return vector_struct_ptr
 
 class ArrayLiteralNode(ASTNode):
     def __init__(self, token: Token):
@@ -503,9 +536,9 @@ class FunctionCallNode(ASTNode):
             val = arg.codegen(builder, module, symbol_table)
             args.append(val)
         try:
-            _args = args
             return builder.call(func, args)
         except Exception as e:
+            _args = args
             breakpoint()
             raise CodeGenError(f"Error calling function {self.token.value}: {e}")
 

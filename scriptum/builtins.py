@@ -131,6 +131,11 @@ def declare_array_functions(module, symbol_table):
         array_index_of = ir.Function(module, array_index_of_ty, name=f"{data_type}_array_index_of")
         symbol_table[f"{data_type}_array_index_of"] = array_index_of
 
+        # Declatre crate_<data_type>_array_from_value
+        create_array_from_value_ty = ir.FunctionType(ir.PointerType(vector_struct_ty), [ret_type, ir.IntType(64)])
+        create_array_from_value = ir.Function(module, create_array_from_value_ty, name=f"create_{data_type}_array_from_value")
+        symbol_table[f"create_{data_type}_array_from_value"] = create_array_from_value
+
 
 def declare_builtins(module, symbol_table):
     declare_printf(module, symbol_table)

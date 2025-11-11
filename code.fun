@@ -251,3 +251,26 @@ clear(bool_arr)
 printf("After clear, bool_arr size should be 0: %d\n", alen(bool_arr))
 clear(arr_of_arr)
 printf("After clear, arr_of_arr size should be 0: %d\n", alen(arr_of_arr))
+
+# Test array replication
+let replicated_int_arr = [10] * 5
+printf("Replicated int array size should be 5: %d\n", alen(replicated_int_arr))
+printf("Replicated int array index 0 should be 10: %d\n", replicated_int_arr[0])
+
+let replicated_value = 1.0
+let replicated_count = 4
+let replicated_float_arr = [replicated_value] * replicated_count
+printf("Replicated float array size should be 4: %d\n", alen(replicated_float_arr))
+printf("Replicated float array index 2 should be 1.0: %.2f\n", replicated_float_arr[2])
+
+let replicated_str_arr = ["scriptum"] * 3
+printf("Replicated string array size should be 3: %d\n", alen(replicated_str_arr))
+printf("Replicated string array index 1 should be 'scriptum': %s\n", replicated_str_arr[1])
+
+let replicated_bool_arr = [false] * 6
+printf("Replicated bool array size should be 6: %d\n", alen(replicated_bool_arr))
+printf("Replicated bool array index 4 should be false (0): %d\n", replicated_bool_arr[4])
+
+let replicated_arr_of_arr = [[0]] * 2
+printf("Replicated array of arrays size should be 2: %d\n", alen(replicated_arr_of_arr))
+printf("Replicated array of arrays index 1 index 0 should be 0: %d\n", replicated_arr_of_arr[1][0])

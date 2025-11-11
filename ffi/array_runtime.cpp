@@ -14,6 +14,11 @@ extern "C" {
         return new IntArray{0, std::vector<int64_t>(initial_size)};
     }
 
+    IntArray* create_int_array_from_value(int64_t value, int64_t size) {
+        IntArray* array = new IntArray{0, std::vector<int64_t>(size, value)};
+        return array;
+    }
+
     void delete_int_array(IntArray* array) {
         delete array;
     }
@@ -94,6 +99,12 @@ extern "C" {
     FloatArray* create_float_array(int64_t initial_size) {
         return new FloatArray{1, std::vector<float>(initial_size)};
     }
+
+    FloatArray* create_float_array_from_value(float value, int64_t size) {
+        FloatArray* array = new FloatArray{1, std::vector<float>(size, value)};
+        return array;
+    }
+
 
     void delete_float_array(FloatArray* array) {
         delete array;
@@ -177,6 +188,11 @@ extern "C" {
         return new BoolArray{2, std::vector<bool>(initial_size)};
     }
 
+    BoolArray* create_bool_array_from_value(bool value, int64_t size) {
+        BoolArray* array = new BoolArray{2, std::vector<bool>(size, value)};
+        return array;
+    }
+
     void delete_bool_array(BoolArray* array) {
         delete array;
     }
@@ -257,6 +273,11 @@ struct StringArray {
 extern "C" {
     StringArray* create_string_array(int64_t initial_size) {
         return new StringArray{3, std::vector<std::string>(initial_size)};
+    }
+
+    StringArray* create_string_array_from_value(const char* value, int64_t size) {
+        StringArray* array = new StringArray{3, std::vector<std::string>(size, std::string(value))};
+        return array;
     }
 
     void delete_string_array(StringArray* array) {
@@ -345,6 +366,11 @@ struct ArrayArray {
 extern "C" {
     ArrayArray* create_array_array(int64_t initial_size) {
         return new ArrayArray{4, std::vector<void*>(initial_size)};
+    }
+
+    ArrayArray* create_array_array_from_value(void* value, int64_t size) {
+        ArrayArray* array = new ArrayArray{4, std::vector<void*>(size, value)};
+        return array;
     }
 
     void delete_array_array(ArrayArray* array) {
