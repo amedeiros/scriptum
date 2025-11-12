@@ -266,5 +266,6 @@ printf("Replicated array of arrays size should be 2: %d\n", alen(replicated_arr_
 printf("Replicated array of arrays index 1 index 0 should be 0: %d\n", replicated_arr_of_arr[1][0])
 
 # Test imports
-import other_module
-hello_world()
+import other_module, another_module
+other_module.hello_world()
+printf("Another module add 5 + 10 = %d\n", another_module.add(5, 10))

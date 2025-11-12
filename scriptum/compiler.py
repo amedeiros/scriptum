@@ -78,6 +78,13 @@ def compile_file(file_name, importer: Importer, symbol_table: SymbolTable, is_ma
     module.triple = binding.get_default_triple()
     module_builder = ir.IRBuilder()
 
+    # Add context to symbol table
+    context = {
+        "module_name": pathlib.Path(file_name).stem,
+        "is_main": is_main,
+    }
+    symbol_table["__context__"] = context
+
     # Compile the builtins to every module so they are available
     builtins.declare_builtins(module, symbol_table)
 
@@ -99,11 +106,12 @@ def compile_file(file_name, importer: Importer, symbol_table: SymbolTable, is_ma
                 if module_ident_node.token.type != TokenType.IDENTIFIER:
                     raise Exception("Invalid module name in import statement")
                 module_name = module_ident_node.token.value
-                imported_module, symbols = importer.import_module(module_name)
+                imported_module, _ = importer.import_module(module_name)
+                # Functions should be "mangled" with module name prefix when not builtin or main
                 for func in imported_module.functions:
                     if func.name not in module.globals:
-                        ir.Function(module, func.function_type, name=func.name)
-                symbol_table.update(symbols)
+                        # Define a declaration for the imported function in the current module to later use with llvm linking resolver
+                        symbol_table[func.name] = ir.Function(module, func.function_type, name=func.name)
         elif node.token.type == TokenType.FROM:
             breakpoint()
         elif node.token.type == TokenType.LET and node.children[0].token.type == TokenType.FUNCTION:

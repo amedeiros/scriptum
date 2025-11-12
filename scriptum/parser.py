@@ -6,15 +6,17 @@ class ParseError(Exception):
     pass
 
 # Precedence
-LOWEST  = 0
-OR      = 1
-AND     = 2
-EQUALS  = 3
-LT_GT   = 4
-SUM     = 5
-PRODUCT = 6
-PREFIX  = 7
-CALL    = 8
+LOWEST    = 0
+OR        = 1
+AND       = 2
+EQUALS    = 3
+LT_GT     = 4
+SUM       = 5
+PRODUCT   = 6
+PREFIX    = 7
+CALL      = 8
+SUBSCRIPT = 9
+DOT       = 10
 
 PRECEDENCES = {}
 PRECEDENCES[TokenType.ASSIGN]   = EQUALS
@@ -31,7 +33,8 @@ PRECEDENCES[TokenType.MINUS]    = SUM
 PRECEDENCES[TokenType.SLASH]    = PRODUCT
 PRECEDENCES[TokenType.STAR]     = PRODUCT
 PRECEDENCES[TokenType.LPAREN]   = CALL
-PRECEDENCES[TokenType.LBRACK]   = CALL + 1  # Subscript binds tighter than function call
+PRECEDENCES[TokenType.LBRACK]   = SUBSCRIPT
+PRECEDENCES[TokenType.DOT]      = DOT
 
 
 class Parser:
@@ -79,6 +82,7 @@ class Parser:
         self._register_infix(TokenType.LPAREN, self._parse_call_expression)
         self._register_infix(TokenType.ASSIGN, self._parse_assign_expression)
         self._register_infix(TokenType.LBRACK, self._parse_subscript_expression)
+        self._register_infix(TokenType.DOT, self._parse_infix_expression)
 
     def _register_prefix(self, token_type: TokenType, parse_func) -> None:
         self.prefix_parse_funcs[token_type] = parse_func
@@ -128,13 +132,14 @@ class Parser:
         # Array replication syntax
         if self.current_token.type == TokenType.STAR and left.token.type == TokenType.LBRACK:
             expression = ArrayReplicationNode(left.token)
+        elif self.current_token.type == TokenType.DOT:
+            expression = DotNode(self.current_token)
         else:
             expression = BinaryOpNode(self.current_token)
 
         expression.add_child(left)
-        precedence = self._cur_precedence()
         self._advance()
-        expression.add_child(self._parse_expression(precedence))
+        expression.add_child(self._parse_expression(LOWEST))
         return expression
 
     def _parse_if_expression(self) -> IfNode:
@@ -324,7 +329,7 @@ class Parser:
         else:
             expression = FunctionCallNode(function_identifier.token)
 
-        expression.children = self._parse_call_arguments()
+        expression.children.extend(self._parse_call_arguments())
         return expression
     
     def _parse_call_arguments(self) -> list[ASTNode]:
@@ -476,12 +481,14 @@ def print_ast(ast: list[ASTNode], level=0):
 
 def __main__():
     code = """
-    import x
-    import x, y
-    import x, y, z as w
-    from x import y
-    from x import y, z as w
-    from x import *
+    other_module.some_function(10, 20)
+
+    # import x
+    # import x, y
+    # import x, y, z as w
+    # from x import y
+    # from x import y, z as w
+    # from x import *
     """
     lexer = Lexer(code)
     parser = Parser(lexer)
