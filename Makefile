@@ -1,7 +1,7 @@
 # Variables
 PYTHON = python
 SCRIPTUM_COMPILER = scriptum.compiler
-CODE_FILE = code.fun
+CODE_FILE = ./stdlib/tests/code.fun
 DYLIB_NAME = libscriptum_runtime.dylib
 FFI_DIR = ./ffi
 LIB_DIR = $(FFI_DIR)/lib

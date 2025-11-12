@@ -2,8 +2,8 @@
 import sys
 import os
 import glob
+import pathlib
 from llvmlite import binding, ir
-from llvmlite.binding import PassManagerBuilder, ModulePassManager
 from scriptum.lexer import Lexer, TokenType
 from scriptum.parser import Parser
 from scriptum.ast import SymbolTable
@@ -13,18 +13,50 @@ import scriptum.builtins as builtins
 class Importer:
     def __init__(self, module_cache: dict):
         self.module_cache = module_cache
+        self.search_paths = self._search_paths()
 
     def import_module(self, module_name: str):
         if module_name in self.module_cache:
             return self.module_cache[module_name]
         symbol_table = SymbolTable()
-        imported_module = compile_file(module_name + ".fun", self, symbol_table)
+        module_path = self._resolve_module_path(module_name)
+        imported_module = compile_file(module_path, self, symbol_table)
         write_file(imported_module, module_name, extension = ".ll", root_dir = "./bin/")
         self.module_cache[module_name] = (imported_module, symbol_table)
         return imported_module, symbol_table
 
+    def _walk_paths(self, path):
+        paths = set()
+        for root, dirs, files in os.walk(path):
+            full_dirs = [os.path.join(root, dir) for dir in dirs]
+            paths.update(full_dirs)
+            for full_dir in full_dirs:
+                paths.update(self._walk_paths(full_dir))
+        
+        return list(paths)
+
+    def _search_paths(self):
+        paths = []
+        stdlib_path = os.path.join(os.getcwd(), "stdlib")
+        if os.path.exists(stdlib_path):
+            paths.append(stdlib_path)
+            paths.extend(self._walk_paths(stdlib_path))
+        else:
+            paths.append("/usr/local/scriptum/stdlib")
+        
+        user_paths = os.environ.get("SCRIPTUMPATH", "").split(os.pathsep)
+        paths.extend(user_paths)
+        return paths
+
+    def _resolve_module_path(self, module_name: str) -> str:
+        for path in self.search_paths:
+            potential_path = os.path.join(path, module_name + ".fun")
+            if os.path.exists(potential_path):
+                return potential_path
+        return None
+
 def write_file(data, filename, extension, root_dir = "./bin/") -> str:
-    data_file = root_dir + filename + extension
+    data_file = os.path.join(root_dir, pathlib.Path(filename).stem + extension)
     with open(data_file, "w") as f:
         f.write(str(data))
     
@@ -102,8 +134,8 @@ if __name__ == "__main__":
     optimized_module = compile_file(source_file, importer, symbol_table, is_main=True)
 
     # Write LLVM IR to file
-    root_dir = "./bin/"
-    main_file = source_file.rsplit(".", 1)[0]
+    root_dir = os.path.abspath("./bin/")
+    main_file = pathlib.Path(source_file).stem
     instructions_file = write_file(optimized_module, main_file, extension = ".ll", root_dir = root_dir)
     print(f"LLVM IR written to {instructions_file}")
 
