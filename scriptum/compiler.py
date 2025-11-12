@@ -74,13 +74,14 @@ def compile_file(file_name, importer: Importer, symbol_table: SymbolTable, is_ma
     ast = parser.parse()
 
     # Create LLVM module and symbol table
-    module = ir.Module(name=file_name)
+    module_name = pathlib.Path(file_name).stem
+    module = ir.Module(name=module_name)
     module.triple = binding.get_default_triple()
     module_builder = ir.IRBuilder()
 
     # Add context to symbol table
     context = {
-        "module_name": pathlib.Path(file_name).stem,
+        "module_name": module_name,
         "is_main": is_main,
     }
     symbol_table["__context__"] = context
@@ -92,7 +93,7 @@ def compile_file(file_name, importer: Importer, symbol_table: SymbolTable, is_ma
     if is_main:
         wrap_block_name = "main"
     else:
-        wrap_block_name = f"__init__{module.name}"
+        wrap_block_name = f"__init__{module_name}"
 
     # Create wrap function and entry block
     func_type = ir.FunctionType(ir.VoidType(), [])
@@ -115,7 +116,7 @@ def compile_file(file_name, importer: Importer, symbol_table: SymbolTable, is_ma
 
                 # Functions should be "mangled" with module name prefix when not builtin or main
                 for func in imported_module.functions:
-                    if func.name not in module.globals:
+                    if func.name not in module.globals and func.metadata.get("__init__") is None:
                         # Define a declaration for the imported function in the current module to later use with llvm linking resolver
                         symbol_table[func.name] = ir.Function(module, func.function_type, name=func.name)
         elif node.token.type == TokenType.FROM:
@@ -123,15 +124,27 @@ def compile_file(file_name, importer: Importer, symbol_table: SymbolTable, is_ma
             module_name = node.module_name.value
             imported_module, imported_symbols = importer.import_module(module_name)
             for module_ident_node in import_node.children:
-                if module_ident_node.token.type != TokenType.IDENTIFIER:
+                if module_ident_node.token.type != TokenType.IDENTIFIER and module_ident_node.token.type != TokenType.STAR:
                     raise Exception("Invalid module name in from import statement")
+                
+                # We are importing all symbols
+                if module_ident_node.token.type == TokenType.STAR:
+                    # Star import: import all symbols from the module
+                    for func in imported_module.functions:
+                        if func.name not in module.globals and "__init__" not in func.name:
+                            # Define a declaration for the imported function in the current module to later use with llvm linking resolver
+                            local_func_name = func.name.split(module_name + "_")[1]
+                            symbol_table[local_func_name] = ir.Function(module, func.function_type, name=func.name)
+                    continue
+
+                # We are importing a specific function
                 # Get local function name (with alias if provided)
                 local_func_name = module_ident_node.token.value
                 if module_ident_node.module_as_name:
                     local_func_name = module_ident_node.module_as_name.value
                 # Import function
                 func_name = module_ident_node.mangled_name(imported_symbols)
-                if func_name not in module.globals:
+                if func_name not in module.globals and func.metadata.get("__init__") is None:
                     # Define a declaration for the imported function in the current module to later use with llvm linking resolver
                     func = imported_symbols.get(func_name)
                     if not func:

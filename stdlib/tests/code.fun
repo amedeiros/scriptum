@@ -270,9 +270,13 @@ import other_module, another_module as am
 other_module.hello_world()
 printf("Another module add 5 + 10 = %d\n", am.add(5, 10))
 
-from from_module import imported_function, another_imported_function
+# From import tests
+from from_module import imported_function, another_imported_function, imported_function_as as imported_alias
 imported_function()
 another_imported_function()
-
-from from_module import imported_function_as as imported_alias
 imported_alias()
+
+# From star import tests
+from import_all_module import *
+star_imported_function()
+another_star_imported_function()
