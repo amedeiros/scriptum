@@ -269,3 +269,10 @@ printf("Replicated array of arrays index 1 index 0 should be 0: %d\n", replicate
 import other_module, another_module as am
 other_module.hello_world()
 printf("Another module add 5 + 10 = %d\n", am.add(5, 10))
+
+from from_module import imported_function, another_imported_function
+imported_function()
+another_imported_function()
+
+from from_module import imported_function_as as imported_alias
+imported_alias()

@@ -119,7 +119,24 @@ def compile_file(file_name, importer: Importer, symbol_table: SymbolTable, is_ma
                         # Define a declaration for the imported function in the current module to later use with llvm linking resolver
                         symbol_table[func.name] = ir.Function(module, func.function_type, name=func.name)
         elif node.token.type == TokenType.FROM:
-            breakpoint()
+            import_node = node.children[0]
+            module_name = node.module_name.value
+            imported_module, imported_symbols = importer.import_module(module_name)
+            for module_ident_node in import_node.children:
+                if module_ident_node.token.type != TokenType.IDENTIFIER:
+                    raise Exception("Invalid module name in from import statement")
+                # Get local function name (with alias if provided)
+                local_func_name = module_ident_node.token.value
+                if module_ident_node.module_as_name:
+                    local_func_name = module_ident_node.module_as_name.value
+                # Import function
+                func_name = module_ident_node.mangled_name(imported_symbols)
+                if func_name not in module.globals:
+                    # Define a declaration for the imported function in the current module to later use with llvm linking resolver
+                    func = imported_symbols.get(func_name)
+                    if not func:
+                        raise Exception(f"Function {module_ident_node.token.value} not found in module {module_name}")
+                    symbol_table[local_func_name] = ir.Function(module, func.function_type, name=func_name)
         elif node.token.type == TokenType.LET and node.children[0].token.type == TokenType.FUNCTION:
             # Function definition at module level
             node.codegen(module_builder, module, symbol_table)
