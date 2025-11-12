@@ -106,7 +106,13 @@ def compile_file(file_name, importer: Importer, symbol_table: SymbolTable, is_ma
                 if module_ident_node.token.type != TokenType.IDENTIFIER:
                     raise Exception("Invalid module name in import statement")
                 module_name = module_ident_node.token.value
-                imported_module, _ = importer.import_module(module_name)
+                imported_module, imported_symbols = importer.import_module(module_name)
+
+                # Alias namespace
+                if module_ident_node.module_as_name:
+                    alias = module_ident_node.module_as_name.value
+                    symbol_table[alias] = imported_symbols
+
                 # Functions should be "mangled" with module name prefix when not builtin or main
                 for func in imported_module.functions:
                     if func.name not in module.globals:

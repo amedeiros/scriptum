@@ -56,6 +56,14 @@ class ASTNode(ABC):
     def add_child(self, child: "ASTNode"):
         self.children.append(child)
 
+    def mangled_name(self, symbol_table):
+        context = symbol_table.get("__context__")
+        name = self.token.value
+        if context and "module_name" in context and not context.get("is_main", False):
+            name = f"{context['module_name']}_{name}"
+
+        return name
+
     def gentype(self) -> ir.Type:
         raise NotImplementedError("gentype not implemented for base ASTNode")
 
@@ -113,7 +121,9 @@ class DotNode(ASTNode):
         if isinstance(right, FunctionCallNode):
             func = symbol_table.get(mangled_name)
             namespace = symbol_table.get(left.token.value)
+            # It might be an "as" alias
             if func is None and namespace is not None:
+                mangled_name = right.mangled_name(namespace)
                 func = namespace.get(mangled_name)
             if func is None:
                 raise CodeGenError(f"Undefined function: {mangled_name}")
@@ -364,12 +374,12 @@ class FunctionNode(ASTNode):
         arg_types = [arg.gentype() for arg in args]
         # First part is the return type
         func_type = ir.FunctionType(self.gentype(), arg_types)
-        func = ir.Function(module, func_type, name=self.mangled_name(symbol_table))
+        func = ir.Function(module, func_type, name=self.mangled_name(scoped_table))
         block = func.append_basic_block(name="entry")
         func_builder = ir.IRBuilder(block)
 
          # Add the function itself to the scoped symbol table for recursion
-        scoped_table[self.mangled_name(symbol_table)] = func
+        scoped_table[self.mangled_name(scoped_table)] = func
 
         # Add parameters to symbol table
         for i, arg in enumerate(func.args):
@@ -807,8 +817,9 @@ class LetNode(ASTNode):
             except Exception as e:
                 pass
 
-        symbol_table[identifier_node.token.value] = var_addr
-        symbol_table[f"{identifier_node.token.value}_type"] = static_type
+        mangled_name = identifier_node.mangled_name(symbol_table)
+        symbol_table[mangled_name] = var_addr
+        symbol_table[f"{mangled_name}_type"] = static_type
         return var_addr
 
 class ModuleIdentifierNode(ASTNode):
