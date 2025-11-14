@@ -159,9 +159,7 @@ class SubscriptNode(ASTNode):
         index = index_node.codegen(builder, module, symbol_table)
 
         # Determine the static type of the array elements
-        self.static_type = base_node.static_type
-        if self.static_type is None and base_node.token.type == TokenType.IDENTIFIER:
-            self.static_type = symbol_table.get(f"{base_node.token.value}").static_type
+        self.static_type = array_static_type_from_identifier(base_node, symbol_table)
         if self.static_type is None:
             raise CodeGenError("Cannot subscript array with unknown element type")
 
@@ -180,9 +178,7 @@ class SubscriptNode(ASTNode):
         else:
             raise CodeGenError(f"Unsupported array element type for subscripting: {self.static_type}")
 
-        result = builder.call(get_array_func, [array_ptr, index])
-        value = builder.bitcast(result, self.static_type)
-        return value
+        return builder.call(get_array_func, [array_ptr, index])
 
 class ArrayReplicationNode(ASTNode):
     static_type: ir.Type
