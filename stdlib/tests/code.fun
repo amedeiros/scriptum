@@ -264,3 +264,24 @@ printf("Replicated bool array index 4 should be false (0): %d\n", replicated_boo
 let replicated_arr_of_arr = [[0]] * 2
 printf("Replicated array of arrays size should be 2: %d\n", alen(replicated_arr_of_arr))
 printf("Replicated array of arrays index 1 index 0 should be 0: %d\n", replicated_arr_of_arr[1][0])
+
+# Test imports
+import other_module, another_module as am
+other_module.hello_world()
+printf("Another module add 5 + 10 = %d\n", am.add(5, 10))
+
+# From import tests
+from from_module import imported_function, another_imported_function, imported_function_as as imported_alias
+imported_function()
+another_imported_function()
+imported_alias()
+
+# From star import tests
+from import_all_module import *
+star_imported_function()
+another_star_imported_function()
+
+# from directory import
+from directory_module import nested_module, another_nested_module as nested_alias
+nested_module.dir_function()
+nested_alias.another_dir_func()

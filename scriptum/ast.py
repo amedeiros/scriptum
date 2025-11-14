@@ -56,6 +56,14 @@ class ASTNode(ABC):
     def add_child(self, child: "ASTNode"):
         self.children.append(child)
 
+    def mangled_name(self, symbol_table):
+        context = symbol_table.get("__context__")
+        name = self.token.value
+        if context and "module_name" in context and not context.get("is_main", False):
+            name = f"{context['module_name']}_{name}"
+
+        return name
+
     def gentype(self) -> ir.Type:
         raise NotImplementedError("gentype not implemented for base ASTNode")
 
@@ -104,6 +112,27 @@ class NumberNode(ASTNode):
         
         raise CodeGenError(f"Unknown number type {self.token.type}")
     
+class DotNode(ASTNode):
+    def codegen(self, builder: IRBuilder, module: Module, symbol_table: dict[str, any]):
+        left = self.children[0]
+        right = self.children[1]
+        mangled_name = f"{left.token.value}_{right.token.value}"
+
+        if isinstance(right, FunctionCallNode):
+            func = symbol_table.get(mangled_name)
+            namespace = symbol_table.get(left.token.value)
+            # It might be an "as" alias
+            if func is None and namespace is not None:
+                mangled_name = right.mangled_name(namespace)
+                func = namespace.get(mangled_name)
+            if func is None:
+                raise CodeGenError(f"Undefined function: {mangled_name}")
+            # Generate argument values
+            arg_values = [child.codegen(builder, module, symbol_table) for child in right.children]
+            return builder.call(func, arg_values)
+        else:
+            raise CodeGenError("DotNode only supports function calls currently")
+
 class SubscriptNode(ASTNode):
     static_type: ir.Type
 
@@ -330,6 +359,14 @@ class FunctionNode(ASTNode):
             return type
         raise CodeGenError(f"Unknown static return type for function {self.name}")
 
+    def mangled_name(self, symbol_table):
+        context = symbol_table.get("__context__")
+        func_name = self.name
+        if context and "module_name" in context and not context.get("is_main", False):
+            func_name = f"{context["module_name"]}_{self.name}"
+
+        return func_name
+
     def codegen(self, builder, module, symbol_table):
         scoped_table = SymbolTable(parent=symbol_table)
         args = self.children[0]
@@ -337,12 +374,12 @@ class FunctionNode(ASTNode):
         arg_types = [arg.gentype() for arg in args]
         # First part is the return type
         func_type = ir.FunctionType(self.gentype(), arg_types)
-        func = ir.Function(module, func_type, name=self.name)
+        func = ir.Function(module, func_type, name=self.mangled_name(scoped_table))
         block = func.append_basic_block(name="entry")
         func_builder = ir.IRBuilder(block)
 
          # Add the function itself to the scoped symbol table for recursion
-        scoped_table[self.name] = func
+        scoped_table[self.mangled_name(scoped_table)] = func
 
         # Add parameters to symbol table
         for i, arg in enumerate(func.args):
@@ -528,9 +565,11 @@ class FunctionCallNode(ASTNode):
         super().__init__(token)
 
     def codegen(self, builder, module, symbol_table):
-        func = symbol_table.get(self.token.value)
+        func_name = self.token.value
+        func = symbol_table.get(func_name)
         if func is None:
-            raise CodeGenError(f"Undefined function: {self.token.value}")
+            raise CodeGenError(f"Undefined function: {func_name}")
+
         args = []
         for arg in self.children:
             val = arg.codegen(builder, module, symbol_table)
@@ -778,6 +817,30 @@ class LetNode(ASTNode):
             except Exception as e:
                 pass
 
-        symbol_table[identifier_node.token.value] = var_addr
-        symbol_table[f"{identifier_node.token.value}_type"] = static_type
+        mangled_name = identifier_node.mangled_name(symbol_table)
+        symbol_table[mangled_name] = var_addr
+        symbol_table[f"{mangled_name}_type"] = static_type
         return var_addr
+
+class ModuleIdentifierNode(ASTNode):
+    def __init__(self, token: Token, module_as_name: Token | None = None):
+        super().__init__(token)
+        self.module_as_name = module_as_name
+
+    def codegen(self, builder, module, symbol_table):
+        # Module identifiers are handled at a higher level; nothing to do here.
+        pass
+
+class FromImportNode(ASTNode):
+    def __init__(self, token: Token, module_name: Token):
+        super().__init__(token)
+        self.module_name = module_name
+
+    def codegen(self, builder, module, symbol_table):
+        # Module identifiers are handled at a higher level; nothing to do here.
+        pass
+
+class ImportNode(ASTNode):
+    def codegen(self, builder, module, symbol_table):
+        # Imports are handled at a higher level; nothing to do here.
+        pass

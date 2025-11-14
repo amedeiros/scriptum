@@ -6,15 +6,17 @@ class ParseError(Exception):
     pass
 
 # Precedence
-LOWEST  = 0
-OR      = 1
-AND     = 2
-EQUALS  = 3
-LT_GT   = 4
-SUM     = 5
-PRODUCT = 6
-PREFIX  = 7
-CALL    = 8
+LOWEST    = 0
+OR        = 1
+AND       = 2
+EQUALS    = 3
+LT_GT     = 4
+SUM       = 5
+PRODUCT   = 6
+PREFIX    = 7
+CALL      = 8
+SUBSCRIPT = 9
+DOT       = 10
 
 PRECEDENCES = {}
 PRECEDENCES[TokenType.ASSIGN]   = EQUALS
@@ -31,7 +33,8 @@ PRECEDENCES[TokenType.MINUS]    = SUM
 PRECEDENCES[TokenType.SLASH]    = PRODUCT
 PRECEDENCES[TokenType.STAR]     = PRODUCT
 PRECEDENCES[TokenType.LPAREN]   = CALL
-PRECEDENCES[TokenType.LBRACK]   = CALL + 1  # Subscript binds tighter than function call
+PRECEDENCES[TokenType.LBRACK]   = SUBSCRIPT
+PRECEDENCES[TokenType.DOT]      = DOT
 
 
 class Parser:
@@ -58,8 +61,10 @@ class Parser:
         self._register_prefix(TokenType.WHILE, self._parse_while_expression)
         self._register_prefix(TokenType.LPAREN, self._parse_grouped_expression)
         self._register_prefix(TokenType.FUNCTION, self._parse_function_literal)
-
         self._register_prefix(TokenType.LBRACK, self._parse_array_literal)
+        
+        self._register_prefix(TokenType.IMPORT, self._parse_import_statement)
+        self._register_prefix(TokenType.FROM, self._parse_from_statement)
 
     def _load_infix_parse_funcs(self) -> None:
         self._register_infix(TokenType.AND, self._parse_infix_expression)
@@ -77,6 +82,7 @@ class Parser:
         self._register_infix(TokenType.LPAREN, self._parse_call_expression)
         self._register_infix(TokenType.ASSIGN, self._parse_assign_expression)
         self._register_infix(TokenType.LBRACK, self._parse_subscript_expression)
+        self._register_infix(TokenType.DOT, self._parse_infix_expression)
 
     def _register_prefix(self, token_type: TokenType, parse_func) -> None:
         self.prefix_parse_funcs[token_type] = parse_func
@@ -126,13 +132,14 @@ class Parser:
         # Array replication syntax
         if self.current_token.type == TokenType.STAR and left.token.type == TokenType.LBRACK:
             expression = ArrayReplicationNode(left.token)
+        elif self.current_token.type == TokenType.DOT:
+            expression = DotNode(self.current_token)
         else:
             expression = BinaryOpNode(self.current_token)
 
         expression.add_child(left)
-        precedence = self._cur_precedence()
         self._advance()
-        expression.add_child(self._parse_expression(precedence))
+        expression.add_child(self._parse_expression(LOWEST))
         return expression
 
     def _parse_if_expression(self) -> IfNode:
@@ -322,7 +329,7 @@ class Parser:
         else:
             expression = FunctionCallNode(function_identifier.token)
 
-        expression.children = self._parse_call_arguments()
+        expression.children.extend(self._parse_call_arguments())
         return expression
     
     def _parse_call_arguments(self) -> list[ASTNode]:
@@ -348,6 +355,53 @@ class Parser:
             left_expr = infix(left_expr)
 
         return left_expr
+
+    def _parse_from_statement(self) -> ASTNode:
+        # Parse the 'from' keyword and module name
+        from_token = self.current_token
+        self._consume(TokenType.FROM)
+        module_name_token = self.current_token
+        self._consume(TokenType.IDENTIFIER)
+
+        # Parse the import statement
+        from_node = FromImportNode(from_token, module_name_token)
+        from_node.children.append(self._parse_import_statement())
+        
+        return from_node
+    
+    def _parse_import_statement(self) -> ASTNode:
+        import_node = ImportNode(self.current_token)
+        self._consume(TokenType.IMPORT)
+        module_name_token = self.current_token
+        if not self._check(TokenType.STAR) and not self._check(TokenType.IDENTIFIER):
+            self._error(self.current_token, f"expected module name or '*' found {self.current_token.value} instead")
+        
+        self._consume(self.current_token.type)  # consume IDENTIFIER or STAR
+
+        alias_token = None
+        if self._check(TokenType.AS):
+            self._consume(TokenType.AS)
+            alias_token = self.current_token
+            self._consume(TokenType.IDENTIFIER)
+
+        module_identifier = ModuleIdentifierNode(module_name_token, alias_token)
+        import_node.add_child(module_identifier)
+        
+        while self._check(TokenType.COMMA):
+            self._consume(TokenType.COMMA)
+            module_name_token = self.current_token
+            self._consume(TokenType.IDENTIFIER)
+
+            alias_token = None
+            if self._check(TokenType.AS):
+                self._consume(TokenType.AS)
+                alias_token = self.current_token
+                self._consume(TokenType.IDENTIFIER)
+
+            module_identifier = ModuleIdentifierNode(module_name_token, alias_token)
+            import_node.add_child(module_identifier)
+
+        return import_node
     
     def _parse_static_type(self) -> TokenType:
         if self._check(TokenType.TYPE_INT):
@@ -418,9 +472,28 @@ class Parser:
 def print_ast(ast: list[ASTNode], level=0):
     indent = "  " * level
     for node in ast:
-        print(f"{indent}{node.__class__.__name__}: {node.token.value} ({node.type.__class__.__name__})")
+        print(f"{indent}{node.__class__.__name__}: {node.token.value} ")
         for child in node.children:
             if isinstance(child, list):
                 print_ast(child, level + 1)
             else:
                 print_ast([child], level + 1)
+
+def __main__():
+    code = """
+    other_module.some_function(10, 20)
+
+    # import x
+    # import x, y
+    # import x, y, z as w
+    # from x import y
+    # from x import y, z as w
+    # from x import *
+    """
+    lexer = Lexer(code)
+    parser = Parser(lexer)
+    ast = parser.parse()
+    print_ast(ast)
+
+if __name__ == "__main__":
+    __main__()
