@@ -19,6 +19,11 @@ TYPE_BOOL = 2
 TYPE_STRING = 3
 TYPE_ARRAY = 4
 
+def array_static_type_from_identifier(array_node, symbol_table):
+    if array_node.token.type == TokenType.IDENTIFIER:
+        return symbol_table.get(f"{array_node.token.value}").static_type
+    return array_node.static_type
+
 class SymbolEntry:
     def __init__(self, variable_addr, static_type=None, node=None):
         self.variable_addr = variable_addr
@@ -215,7 +220,6 @@ class ArrayReplicationNode(ASTNode):
 class ArrayLiteralNode(ASTNode):
     def __init__(self, token: Token):
         super().__init__(token)
-        self.static_type = None
 
     def codegen(self, builder, module, symbol_table):
         if len(self.children) == 0 and self.static_type is None:
@@ -397,11 +401,10 @@ class FunctionNode(ASTNode):
             arg.name = arg_names[i]
             static_type = None
             # If the argument is an array, store its element type
-            if hasattr(args[i], "static_type"):
-                if args[i].static_type == TokenType.TYPE_ARRAY:
-                    static_type = self._gentype_from_token(args[i].callable_arg_types[0])
-                else:
-                    static_type = self._gentype_from_token(args[i].static_type)
+            if args[i].static_type == TokenType.TYPE_ARRAY:
+                static_type = self._gentype_from_token(args[i].callable_arg_types[0])
+            else:
+                static_type = self._gentype_from_token(args[i].static_type)
             # Create a local variable for the argument and store the value
             if isinstance(arg.type, ir.types.PointerType):
                 local_ptr = arg
@@ -429,11 +432,7 @@ class ArrayRemoveNode(ASTNode):
         index = index_node.codegen(builder, module, symbol_table)
 
         # We want the static type of the array elements not the value passed.
-        if array_node.token.type == TokenType.IDENTIFIER:
-            static_type = symbol_table.get(f"{array_node.token.value}").static_type
-        else:
-            static_type = array_node.static_type
-
+        static_type = array_static_type_from_identifier(array_node, symbol_table)
         if static_type is None:
             raise CodeGenError(f"Cannot determine static type of array for append: {array_node.token.value}")
         
@@ -461,11 +460,7 @@ class ArrayIndexOfNode(ASTNode):
         value = value_node.codegen(builder, module, symbol_table)
 
         # We want the static type of the array elements not the value passed.
-        if array_node.token.type == TokenType.IDENTIFIER:
-            static_type = symbol_table.get(f"{array_node.token.value}").static_type
-        else:
-            static_type = array_node.static_type
-
+        static_type = array_static_type_from_identifier(array_node, symbol_table)
         if static_type is None:
             raise CodeGenError(f"Cannot determine static type of array for index_of: {array_node.token.value}")
 
@@ -495,11 +490,7 @@ class ArrayInsertNode(ASTNode):
         value = value_node.codegen(builder, module, symbol_table)
 
         # We want the static type of the array elements not the value passed.
-        if array_node.token.type == TokenType.IDENTIFIER:
-            static_type = symbol_table.get(f"{array_node.token.value}").static_type
-        else:
-            static_type = array_node.static_type
-
+        static_type = array_static_type_from_identifier(array_node, symbol_table)
         if static_type is None:
             raise CodeGenError(f"Cannot determine static type of array for pop: {array_node.token.value}")
         
@@ -525,11 +516,7 @@ class ArrayPopNode(ASTNode):
         array_ptr = array_node.codegen(builder, module, symbol_table)
 
         # We want the static type of the array elements not the value passed.
-        if array_node.token.type == TokenType.IDENTIFIER:
-            static_type = symbol_table.get(f"{array_node.token.value}").static_type
-        else:
-            static_type = array_node.static_type
-
+        static_type = array_static_type_from_identifier(array_node, symbol_table)
         if static_type is None:
             raise CodeGenError(f"Cannot determine static type of array for pop: {array_node.token.value}")
         
@@ -557,11 +544,7 @@ class AppendNode(ASTNode):
         value = value_node.codegen(builder, module, symbol_table)
 
         # We want the static type of the array elements not the value passed.
-        if array_node.token.type == TokenType.IDENTIFIER:
-            static_type = symbol_table.get(f"{array_node.token.value}").static_type
-        else:
-            static_type = array_node.static_type
-
+        static_type = array_static_type_from_identifier(array_node, symbol_table)
         if static_type is None:
             raise CodeGenError(f"Cannot determine static type of array for append: {array_node.token.value}")
 
