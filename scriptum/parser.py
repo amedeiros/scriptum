@@ -46,6 +46,7 @@ class Parser:
         self.infix_parse_funcs = {}
         self._load_prefix_parse_funcs()
         self._load_infix_parse_funcs()
+        self.lambda_count = 0
 
     def _load_prefix_parse_funcs(self) -> None:
         self._register_prefix(TokenType.IDENTIFIER, self._parse_identifier)
@@ -62,7 +63,6 @@ class Parser:
         self._register_prefix(TokenType.LPAREN, self._parse_grouped_expression)
         self._register_prefix(TokenType.FUNCTION, self._parse_function_literal)
         self._register_prefix(TokenType.LBRACK, self._parse_array_literal)
-        
         self._register_prefix(TokenType.IMPORT, self._parse_import_statement)
         self._register_prefix(TokenType.FROM, self._parse_from_statement)
 
@@ -186,17 +186,29 @@ class Parser:
     
     def _parse_function_params(self) -> list:
         identifiers = []
+        default_arg_found = False
         if self._check(TokenType.RPAREN):
             self._advance()
             return identifiers
         while not self._check(TokenType.RPAREN) and not self._is_eof():
-                # Parse the argument identifier
-                arg_ident = self._parse_argument_identifier()
-                if not arg_ident:
-                    self._error(self.current_token, "expected function argument identifier")
-                identifiers.append(arg_ident)
-                if not self._check(TokenType.RPAREN):
-                    self._consume(TokenType.COMMA)
+            # Parse the argument identifier
+            arg_ident = self._parse_argument_identifier()
+            if not arg_ident:
+                self._error(self.current_token, "expected function argument identifier")
+            # Add the identifier to the list of parameters
+            identifiers.append(arg_ident)
+            # Parse default value if any
+            if self._check(TokenType.ASSIGN):
+                default_arg_found = True
+                self._consume(TokenType.ASSIGN)
+                # Parse default value expression
+                default_value_expr = self._parse_expression(LOWEST)
+                arg_ident.default_value = default_value_expr
+            elif default_arg_found:
+                self._error(self.current_token, "non-default argument follows default argument")
+            # Parse comma if more parameters
+            if not self._check(TokenType.RPAREN):
+                self._consume(TokenType.COMMA)
         self._consume(TokenType.RPAREN)
         return identifiers
 
@@ -337,7 +349,12 @@ class Parser:
         if self._check(TokenType.LPAREN):
             self._consume(TokenType.LPAREN)
             while not self._check(TokenType.RPAREN) and not self._is_eof():
-                args.append(self._parse_expression(LOWEST))
+                argument = self._parse_expression(LOWEST)
+                if argument.token.type == TokenType.FUNCTION:
+                    argument.name = f"{self.lambda_count}_lambda"
+                    self.lambda_count += 1
+
+                args.append(argument)
                 if not self._check(TokenType.RPAREN):
                     self._consume(TokenType.COMMA)
             self._consume(TokenType.RPAREN)

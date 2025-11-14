@@ -19,15 +19,22 @@ TYPE_BOOL = 2
 TYPE_STRING = 3
 TYPE_ARRAY = 4
 
-class SymbolTable(dict[str, ir.Value]):
+class SymbolEntry:
+    def __init__(self, variable_addr, static_type=None, node=None):
+        self.variable_addr = variable_addr
+        self.static_type = static_type
+        self.node = node
+
+
+class SymbolTable(dict[str, SymbolEntry]):
     def __init__(self, parent: "SymbolTable" = None):
         super().__init__()
         self.parent = parent
 
-    def __setitem__(self, key: str, value: ir.Value):
+    def __setitem__(self, key: str, value: SymbolEntry):
         super().__setitem__(key, value)
 
-    def __getitem__(self, key: str) -> ir.Value:
+    def __getitem__(self, key: str) -> SymbolEntry:
         try:
             return super().__getitem__(key)
         except KeyError:
@@ -35,11 +42,12 @@ class SymbolTable(dict[str, ir.Value]):
                 return self.parent[key]
             raise CodeGenError(f"Undefined variable: {key}")
     
-    def get(self, key: str) -> ir.Value | None:
+    def get(self, key: str) -> SymbolEntry | None:
         v = super().get(key)
         if v is None and self.parent:
             return self.parent.get(key)
         return v
+
 
 class CodeGenError(Exception):
     pass
@@ -48,6 +56,7 @@ class CodeGenError(Exception):
 class ASTNode(ABC):
     token: Token
     children: list["ASTNode"]
+    static_type = None
 
     def __init__(self, token: Token):
         self.token = token
@@ -129,7 +138,7 @@ class DotNode(ASTNode):
                 raise CodeGenError(f"Undefined function: {mangled_name}")
             # Generate argument values
             arg_values = [child.codegen(builder, module, symbol_table) for child in right.children]
-            return builder.call(func, arg_values)
+            return builder.call(func.variable_addr, arg_values)
         else:
             raise CodeGenError("DotNode only supports function calls currently")
 
@@ -147,22 +156,22 @@ class SubscriptNode(ASTNode):
         # Determine the static type of the array elements
         self.static_type = base_node.static_type
         if self.static_type is None and base_node.token.type == TokenType.IDENTIFIER:
-            self.static_type = symbol_table.get(f"{base_node.token.value}_type")
+            self.static_type = symbol_table.get(f"{base_node.token.value}").static_type
         if self.static_type is None:
             raise CodeGenError("Cannot subscript array with unknown element type")
 
         # Select the appropriate get function based on the static type
         get_array_func = None
         if self.static_type == ir.IntType(64):
-            get_array_func = symbol_table["int_array_get"]
+            get_array_func = symbol_table["int_array_get"].variable_addr
         elif self.static_type == ir.FloatType():
-            get_array_func = symbol_table["float_array_get"]
+            get_array_func = symbol_table["float_array_get"].variable_addr
         elif self.static_type == ir.IntType(1):
-            get_array_func = symbol_table["bool_array_get"]
+            get_array_func = symbol_table["bool_array_get"].variable_addr
         elif ASTNode.is_string_value(self.static_type):
-            get_array_func = symbol_table["string_array_get"]
+            get_array_func = symbol_table["string_array_get"].variable_addr
         elif self.static_type == ir.PointerType(vector_struct_ty):
-            get_array_func = symbol_table["array_array_get"]        
+            get_array_func = symbol_table["array_array_get"].variable_addr
         else:
             raise CodeGenError(f"Unsupported array element type for subscripting: {self.static_type}")
 
@@ -186,15 +195,15 @@ class ArrayReplicationNode(ASTNode):
         # Select the appropriate create and set functions based on element type
         create_array_func = None
         if self.static_type == ir.IntType(64):
-            create_array_func = symbol_table["create_int_array_from_value"]
+            create_array_func = symbol_table["create_int_array_from_value"].variable_addr
         elif self.static_type == ir.FloatType():
-            create_array_func = symbol_table["create_float_array_from_value"]
+            create_array_func = symbol_table["create_float_array_from_value"].variable_addr
         elif self.static_type == ir.IntType(1):
-            create_array_func = symbol_table["create_bool_array_from_value"]
+            create_array_func = symbol_table["create_bool_array_from_value"].variable_addr
         elif ASTNode.is_string_value(self.static_type):
-            create_array_func = symbol_table["create_string_array_from_value"]
+            create_array_func = symbol_table["create_string_array_from_value"].variable_addr
         elif self.static_type == ir.PointerType(vector_struct_ty):
-            create_array_func = symbol_table["create_array_array_from_value"]
+            create_array_func = symbol_table["create_array_array_from_value"].variable_addr
         else:
             raise CodeGenError(f"Unsupported array element type for replication: {self.static_type}")
 
@@ -212,9 +221,8 @@ class ArrayLiteralNode(ASTNode):
         if len(self.children) == 0 and self.static_type is None:
             raise CodeGenError("Cannot infer type of empty array literal")
         elif len(self.children) == 0:
-            # Empty array, return a null pointer
-            create_array_func = symbol_table["create_generic_array"]
-            return builder.call(create_array_func, [ir.Constant(self.static_type, 0)])
+            # Not supported right now.
+            raise CodeGenError("Cannot create empty array literal without a known static type")
 
         # Generate code for each element
         elem_values = [child.codegen(builder, module, symbol_table) for child in self.children]
@@ -225,20 +233,20 @@ class ArrayLiteralNode(ASTNode):
         create_array_func = None
         array_set_func = None
         if elem_type == ir.IntType(64):
-            create_array_func = symbol_table["create_int_array"]
-            array_set_func = symbol_table["int_array_set"]
+            create_array_func = symbol_table["create_int_array"].variable_addr
+            array_set_func = symbol_table["int_array_set"].variable_addr
         elif elem_type == ir.FloatType():
-            create_array_func = symbol_table["create_float_array"]
-            array_set_func = symbol_table["float_array_set"]
+            create_array_func = symbol_table["create_float_array"].variable_addr
+            array_set_func = symbol_table["float_array_set"].variable_addr
         elif elem_type == ir.IntType(1):
-            create_array_func = symbol_table["create_bool_array"]
-            array_set_func = symbol_table["bool_array_set"]
+            create_array_func = symbol_table["create_bool_array"].variable_addr
+            array_set_func = symbol_table["bool_array_set"].variable_addr
         elif ASTNode.is_string_value(elem_type):
-            create_array_func = symbol_table["create_string_array"]
-            array_set_func = symbol_table["string_array_set"]
+            create_array_func = symbol_table["create_string_array"].variable_addr
+            array_set_func = symbol_table["string_array_set"].variable_addr
         elif elem_type == ir.PointerType(vector_struct_ty):
-            create_array_func = symbol_table["create_array_array"]
-            array_set_func = symbol_table["array_array_set"]
+            create_array_func = symbol_table["create_array_array"].variable_addr
+            array_set_func = symbol_table["array_array_set"].variable_addr
         else:
             raise CodeGenError(f"Unsupported array element type: {elem_type}")
 
@@ -305,6 +313,8 @@ class IdentifierNode(ASTNode):
         var_addr = symbol_table.get(self.token.value)
         if var_addr is None:
             raise CodeGenError(f"Undefined variable: {self.token.value}")
+        else:
+            var_addr = var_addr.variable_addr
         
         # If function return
         if isinstance(var_addr, ir.Function):
@@ -329,6 +339,7 @@ class ArgumentIdentifierNode(IdentifierNode):
                                      TokenType.TYPE_STRING, TokenType.TYPE_BOOL,
                                      TokenType.TYPE_ARRAY, TokenType.TYPE_CALLABLE]]
     callable_return_type: ir.Type
+    default_value: ASTNode | None
 
     def __init__(self, token: Token, static_type, callable_arg_types=[], callable_return_type=TokenType.TYPE_VOID):
         super().__init__(token)
@@ -378,13 +389,27 @@ class FunctionNode(ASTNode):
         block = func.append_basic_block(name="entry")
         func_builder = ir.IRBuilder(block)
 
-         # Add the function itself to the scoped symbol table for recursion
-        scoped_table[self.mangled_name(scoped_table)] = func
+        # Add the function itself to the scoped symbol table for recursion
+        scoped_table[self.mangled_name(scoped_table)] = SymbolEntry(variable_addr=func, static_type=self.gentype(), node=self)
 
         # Add parameters to symbol table
         for i, arg in enumerate(func.args):
             arg.name = arg_names[i]
-            scoped_table[arg.name] = arg
+            static_type = None
+            # If the argument is an array, store its element type
+            if hasattr(args[i], "static_type"):
+                if args[i].static_type == TokenType.TYPE_ARRAY:
+                    static_type = self._gentype_from_token(args[i].callable_arg_types[0])
+                else:
+                    static_type = self._gentype_from_token(args[i].static_type)
+            # Create a local variable for the argument and store the value
+            if isinstance(arg.type, ir.types.PointerType):
+                local_ptr = arg
+            else:
+                local_ptr = func_builder.alloca(arg.type, name=arg.name)
+                func_builder.store(arg, local_ptr)
+            # Add the argument to the symbol table
+            scoped_table[arg.name] = SymbolEntry(local_ptr, static_type, args[i])
 
         # Codegen the function body.
         for node in self.children[1:]:
@@ -405,7 +430,7 @@ class ArrayRemoveNode(ASTNode):
 
         # We want the static type of the array elements not the value passed.
         if array_node.token.type == TokenType.IDENTIFIER:
-            static_type = symbol_table.get(f"{array_node.token.value}_type")
+            static_type = symbol_table.get(f"{array_node.token.value}").static_type
         else:
             static_type = array_node.static_type
 
@@ -414,15 +439,15 @@ class ArrayRemoveNode(ASTNode):
         
         remove_func = None
         if static_type == ir.IntType(64):
-            remove_func = symbol_table["int_array_remove"]
+            remove_func = symbol_table["int_array_remove"].variable_addr
         elif static_type == ir.FloatType():
-            remove_func = symbol_table["float_array_remove"]
+            remove_func = symbol_table["float_array_remove"].variable_addr
         elif static_type == ir.IntType(1):
-            remove_func = symbol_table["bool_array_remove"]
+            remove_func = symbol_table["bool_array_remove"].variable_addr
         elif static_type == ir.PointerType(vector_struct_ty):
-            remove_func = symbol_table["array_array_remove"]
+            remove_func = symbol_table["array_array_remove"].variable_addr
         elif ASTNode.is_string_value(static_type):
-            remove_func = symbol_table["string_array_remove"]
+            remove_func = symbol_table["string_array_remove"].variable_addr
         else:
             raise CodeGenError(f"Unsupported array element type for remove: {static_type}")
         
@@ -437,7 +462,7 @@ class ArrayIndexOfNode(ASTNode):
 
         # We want the static type of the array elements not the value passed.
         if array_node.token.type == TokenType.IDENTIFIER:
-            static_type = symbol_table.get(f"{array_node.token.value}_type")
+            static_type = symbol_table.get(f"{array_node.token.value}").static_type
         else:
             static_type = array_node.static_type
 
@@ -446,15 +471,15 @@ class ArrayIndexOfNode(ASTNode):
 
         index_of_func = None
         if static_type == ir.IntType(64):
-            index_of_func = symbol_table["int_array_index_of"]
+            index_of_func = symbol_table["int_array_index_of"].variable_addr
         elif static_type == ir.FloatType():
-            index_of_func = symbol_table["float_array_index_of"]
+            index_of_func = symbol_table["float_array_index_of"].variable_addr
         elif static_type == ir.IntType(1):
-            index_of_func = symbol_table["bool_array_index_of"]
+            index_of_func = symbol_table["bool_array_index_of"].variable_addr
         elif static_type == ir.PointerType(vector_struct_ty):
-            index_of_func = symbol_table["array_array_index_of"]
+            index_of_func = symbol_table["array_array_index_of"].variable_addr
         elif ASTNode.is_string_value(static_type):
-            index_of_func = symbol_table["string_array_index_of"]
+            index_of_func = symbol_table["string_array_index_of"].variable_addr
         else:
             raise CodeGenError(f"Unsupported array element type for index_of: {static_type}")
 
@@ -471,7 +496,7 @@ class ArrayInsertNode(ASTNode):
 
         # We want the static type of the array elements not the value passed.
         if array_node.token.type == TokenType.IDENTIFIER:
-            static_type = symbol_table.get(f"{array_node.token.value}_type")
+            static_type = symbol_table.get(f"{array_node.token.value}").static_type
         else:
             static_type = array_node.static_type
 
@@ -480,15 +505,15 @@ class ArrayInsertNode(ASTNode):
         
         insert_func = None
         if static_type == ir.IntType(64):
-            insert_func = symbol_table["int_array_insert"]
+            insert_func = symbol_table["int_array_insert"].variable_addr
         elif static_type == ir.FloatType():
-            insert_func = symbol_table["float_array_insert"]
+            insert_func = symbol_table["float_array_insert"].variable_addr
         elif static_type == ir.IntType(1):
-            insert_func = symbol_table["bool_array_insert"]
+            insert_func = symbol_table["bool_array_insert"].variable_addr
         elif static_type == ir.PointerType(vector_struct_ty):
-            insert_func = symbol_table["array_array_insert"]
+            insert_func = symbol_table["array_array_insert"].variable_addr
         elif ASTNode.is_string_value(static_type):
-            insert_func = symbol_table["string_array_insert"]
+            insert_func = symbol_table["string_array_insert"].variable_addr
         else:
             raise CodeGenError(f"Unsupported array element type for insert: {static_type}")
         
@@ -501,7 +526,7 @@ class ArrayPopNode(ASTNode):
 
         # We want the static type of the array elements not the value passed.
         if array_node.token.type == TokenType.IDENTIFIER:
-            static_type = symbol_table.get(f"{array_node.token.value}_type")
+            static_type = symbol_table.get(f"{array_node.token.value}").static_type
         else:
             static_type = array_node.static_type
 
@@ -510,15 +535,15 @@ class ArrayPopNode(ASTNode):
         
         pop_func = None
         if static_type == ir.IntType(64):
-            pop_func = symbol_table["int_array_pop"]
+            pop_func = symbol_table["int_array_pop"].variable_addr
         elif static_type == ir.FloatType():
-            pop_func = symbol_table["float_array_pop"]
+            pop_func = symbol_table["float_array_pop"].variable_addr
         elif static_type == ir.IntType(1):
-            pop_func = symbol_table["bool_array_pop"]
+            pop_func = symbol_table["bool_array_pop"].variable_addr
         elif static_type == ir.PointerType(vector_struct_ty):
-            pop_func = symbol_table["array_array_pop"]
+            pop_func = symbol_table["array_array_pop"].variable_addr
         elif ASTNode.is_string_value(static_type):
-            pop_func = symbol_table["string_array_pop"]
+            pop_func = symbol_table["string_array_pop"].variable_addr
         else:
             raise CodeGenError(f"Unsupported array element type for pop: {static_type}")
         
@@ -533,7 +558,7 @@ class AppendNode(ASTNode):
 
         # We want the static type of the array elements not the value passed.
         if array_node.token.type == TokenType.IDENTIFIER:
-            static_type = symbol_table.get(f"{array_node.token.value}_type")
+            static_type = symbol_table.get(f"{array_node.token.value}").static_type
         else:
             static_type = array_node.static_type
 
@@ -542,15 +567,15 @@ class AppendNode(ASTNode):
 
         append_func = None
         if static_type == ir.IntType(64):
-            append_func = symbol_table["int_array_push_back"]
+            append_func = symbol_table["int_array_push_back"].variable_addr
         elif static_type == ir.FloatType():
-            append_func = symbol_table["float_array_push_back"]
+            append_func = symbol_table["float_array_push_back"].variable_addr
         elif static_type == ir.IntType(1):
-            append_func = symbol_table["bool_array_push_back"]
+            append_func = symbol_table["bool_array_push_back"].variable_addr
         elif static_type == ir.PointerType(vector_struct_ty):
-            append_func = symbol_table["array_array_push_back"]
+            append_func = symbol_table["array_array_push_back"].variable_addr
         elif ASTNode.is_string_value(static_type):
-            append_func = symbol_table["string_array_push_back"]
+            append_func = symbol_table["string_array_push_back"].variable_addr
         else:
             raise CodeGenError(f"Unsupported array element type for append: {static_type}")
 
@@ -566,14 +591,48 @@ class FunctionCallNode(ASTNode):
 
     def codegen(self, builder, module, symbol_table):
         func_name = self.token.value
-        func = symbol_table.get(func_name)
-        if func is None:
+        symbol_entry = symbol_table.get(func_name)
+        if symbol_entry is None:
             raise CodeGenError(f"Undefined function: {func_name}")
 
+        # Get arguments
+        func = symbol_entry.variable_addr
         args = []
-        for arg in self.children:
-            val = arg.codegen(builder, module, symbol_table)
-            args.append(val)
+        # Function being called was an argument to another function so we need the pointer to the function type instead of the function itself
+        if symbol_entry.node and symbol_entry.node.static_type == TokenType.TYPE_CALLABLE:
+            # Load it
+            params = func.type.pointee.args
+            var_arg_func = func.type.pointee.var_arg
+        else: # Regular function
+            params = func.args
+            var_arg_func = func.ftype.var_arg
+
+        param_len = len(params)
+        arg_len = len(self.children)
+
+        if not var_arg_func and param_len < arg_len:
+            raise CodeGenError(f"Too many arguments provided for function {func_name}: expected {param_len}, got {arg_len}")
+
+        if param_len > arg_len:
+            # Check for default values
+            node_arguments = symbol_entry.node.children[0]
+            for i in range(len(node_arguments)):
+                if self.children and i < arg_len:
+                    arg = self.children[i]
+                    val = arg.codegen(builder, module, symbol_table)
+                    args.append(val)
+                else:
+                    arg_node = node_arguments[i]
+                    if isinstance(arg_node, ArgumentIdentifierNode) and arg_node.default_value is not None:
+                        val = arg_node.default_value.codegen(builder, module, symbol_table)
+                        args.append(val)
+                    else:
+                        raise CodeGenError(f"Missing argument {arg_node.token.value} for function {func_name} and no default value provided")
+        else:
+            for arg in self.children:
+                val = arg.codegen(builder, module, symbol_table)
+                args.append(val)
+
         try:
             return builder.call(func, args)
         except Exception as e:
@@ -618,10 +677,10 @@ class BinaryOpNode(ASTNode):
         if infix_op == TokenType.PLUS:
             # String concatenation
             if (ASTNode.is_string_value(left) and ASTNode.is_string_value(right)):
-                strlen_func = symbol_table.get("strlen")
-                strcpy_func = symbol_table.get("strcpy")
-                strcat_func = symbol_table.get("strcat")
-                malloc_func = symbol_table.get("malloc")
+                strlen_func = symbol_table.get("strlen").variable_addr
+                strcpy_func = symbol_table.get("strcpy").variable_addr
+                strcat_func = symbol_table.get("strcat").variable_addr
+                malloc_func = symbol_table.get("malloc").variable_addr
                 left_ptr = builder.bitcast(left, ir.PointerType(ir.IntType(8)))
                 right_ptr = builder.bitcast(right, ir.PointerType(ir.IntType(8)))
                 left_len = builder.call(strlen_func, [left_ptr])
@@ -656,7 +715,7 @@ class BinaryOpNode(ASTNode):
         elif infix_op in (TokenType.EQUAL, TokenType.NOT_EQ, TokenType.LT_EQ, TokenType.LT, TokenType.GT_EQ, TokenType.GT):
             op = self.token.value
             if ASTNode.is_string_value(left) and ASTNode.is_string_value(right):
-                func = symbol_table.get("strcmp")
+                func = symbol_table.get("strcmp").variable_addr
                 left_ptr = builder.bitcast(left, ir.PointerType(ir.IntType(8)))
                 right_ptr = builder.bitcast(right, ir.PointerType(ir.IntType(8)))
                 truthy =  builder.call(func, [left_ptr, right_ptr])
@@ -745,7 +804,7 @@ class AssignNode(ASTNode):
         value_node = self.children[1]
 
         if node.token.type == TokenType.IDENTIFIER:
-            var_addr = symbol_table.get(node.token.value)
+            var_addr = symbol_table.get(node.token.value).variable_addr
             value = value_node.codegen(builder, module, symbol_table)
             builder.store(value, var_addr)
         elif node.token.type == TokenType.LBRACK: # Subscript assignment
@@ -762,13 +821,13 @@ class AssignNode(ASTNode):
             # Select the appropriate set function based on the static type
             set_array_func = None
             if static_type == ir.IntType(64):
-                set_array_func = symbol_table["int_array_set"]
+                set_array_func = symbol_table["int_array_set"].variable_addr
             elif static_type == ir.FloatType():
-                set_array_func = symbol_table["float_array_set"]
+                set_array_func = symbol_table["float_array_set"].variable_addr
             elif static_type == ir.IntType(1):
-                set_array_func = symbol_table["bool_array_set"]
+                set_array_func = symbol_table["bool_array_set"].variable_addr
             elif ASTNode.is_string_value(static_type):
-                set_array_func = symbol_table["string_array_set"]
+                set_array_func = symbol_table["string_array_set"].variable_addr
             else:
                 raise CodeGenError(f"Unsupported array element type for assignment: {static_type}")
 
@@ -790,7 +849,7 @@ class LetNode(ASTNode):
         if identifier_node.token.type != TokenType.IDENTIFIER:
             raise CodeGenError("Invalid identifier")
 
-        if value_node.token.type in (TokenType.STRING, TokenType.IDENTIFIER, TokenType.FUNCTION, TokenType.LBRACK):
+        if isinstance(value, ir.PointerType) or value_node.token.type in (TokenType.STRING, TokenType.FUNCTION, TokenType.LBRACK):
             var_addr = value
         else: # INT, FLOAT, BOOL, infix operations, etc
             var_addr = builder.alloca(value.type)
@@ -808,7 +867,7 @@ class LetNode(ASTNode):
             identifier_node.array_elem_type = value_node.static_type
             static_type = value_node.static_type
         elif value_node.token.type == TokenType.IDENTIFIER:
-            identifier_node.static_type = symbol_table.get(f"{value_node.token.value}_type")
+            identifier_node.static_type = symbol_table.get(f"{value_node.token.value}").static_type
             static_type = identifier_node.static_type
         else:
             try:
@@ -818,8 +877,7 @@ class LetNode(ASTNode):
                 pass
 
         mangled_name = identifier_node.mangled_name(symbol_table)
-        symbol_table[mangled_name] = var_addr
-        symbol_table[f"{mangled_name}_type"] = static_type
+        symbol_table[mangled_name] = SymbolEntry(var_addr, static_type, value_node)
         return var_addr
 
 class ModuleIdentifierNode(ASTNode):

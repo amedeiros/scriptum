@@ -6,7 +6,7 @@ import pathlib
 from llvmlite import binding, ir
 from scriptum.lexer import Lexer, TokenType
 from scriptum.parser import Parser
-from scriptum.ast import SymbolTable
+from scriptum.ast import SymbolTable, SymbolEntry
 import scriptum.builtins as builtins
 
 
@@ -125,7 +125,7 @@ def compile_file(file_name, importer: Importer, symbol_table: SymbolTable, is_ma
                 for func in imported_module.functions:
                     if func.name not in module.globals and func.metadata.get("__init__") is None:
                         # Define a declaration for the imported function in the current module to later use with llvm linking resolver
-                        symbol_table[func.name] = ir.Function(module, func.function_type, name=func.name)
+                        symbol_table[func.name] = SymbolEntry(ir.Function(module, func.function_type, name=func.name), func.function_type)
         elif node.token.type == TokenType.FROM:
             import_node = node.children[0]
             root_module_name = node.module_name.value
@@ -141,7 +141,7 @@ def compile_file(file_name, importer: Importer, symbol_table: SymbolTable, is_ma
                         if func.name not in module.globals and "__init__" not in func.name:
                             # Define a declaration for the imported function in the current module to later use with llvm linking resolver
                             local_func_name = func.name.split(module_name + "_")[1]
-                            symbol_table[local_func_name] = ir.Function(module, func.function_type, name=func.name)
+                            symbol_table[local_func_name] = SymbolEntry(ir.Function(module, func.function_type, name=func.name), func.function_type)
                     continue
 
                 # Namespace the imported module from the directory
@@ -153,7 +153,7 @@ def compile_file(file_name, importer: Importer, symbol_table: SymbolTable, is_ma
                     for func in imported_module.functions:
                         if func.name not in module.globals and "__init__" not in func.name:
                             # Define a declaration for the imported function in the current module to later use with llvm linking resolver
-                            symbol_table[func.name] = ir.Function(module, func.function_type, name=func.name)
+                            symbol_table[func.name] = SymbolEntry(ir.Function(module, func.function_type, name=func.name), func.function_type)
                     continue
 
                 # We are importing a specific function
@@ -163,12 +163,13 @@ def compile_file(file_name, importer: Importer, symbol_table: SymbolTable, is_ma
                     local_func_name = module_ident_node.module_as_name.value
                 # Import function
                 func_name = module_ident_node.mangled_name(imported_symbols)
-                if func_name not in module.globals and func.metadata.get("__init__") is None:
+                if func_name not in module.globals:
                     # Define a declaration for the imported function in the current module to later use with llvm linking resolver
                     func = imported_symbols.get(func_name)
                     if not func:
                         raise Exception(f"Function {module_ident_node.token.value} not found in module {module_name}")
-                    symbol_table[local_func_name] = ir.Function(module, func.function_type, name=func_name)
+
+                    symbol_table[local_func_name] = SymbolEntry(ir.Function(module, func.variable_addr.function_type, name=func_name), func.variable_addr.function_type)
         elif node.token.type == TokenType.LET and node.children[0].token.type == TokenType.FUNCTION:
             # Function definition at module level
             node.codegen(module_builder, module, symbol_table)
