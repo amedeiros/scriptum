@@ -15,15 +15,18 @@ class Importer:
         self.module_cache = module_cache
         self.search_paths = self._search_paths()
 
-    def import_module(self, module_name: str):
-        if module_name in self.module_cache:
-            return self.module_cache[module_name]
+    def import_module(self, module_name: str, submodule_name: str = None):
+        module_path, dir_found = self._resolve_module_path(module_name, submodule_name)
+        found_name = pathlib.Path(module_path).stem # The module name might change if it's a submodule in a directory
+        if module_path in self.module_cache:
+            return self.module_cache[module_path]
+
         symbol_table = SymbolTable()
-        module_path = self._resolve_module_path(module_name)
         imported_module = compile_file(module_path, self, symbol_table)
-        write_file(imported_module, module_name, extension = ".ll", root_dir = "./bin/")
-        self.module_cache[module_name] = (imported_module, symbol_table)
-        return imported_module, symbol_table
+        write_file(imported_module, found_name, extension = ".ll", root_dir = "./bin/")
+        self.module_cache[module_path] = (imported_module, symbol_table, found_name, dir_found)
+
+        return self.module_cache[module_path]
 
     def _walk_paths(self, path):
         paths = set()
@@ -33,7 +36,7 @@ class Importer:
             for full_dir in full_dirs:
                 paths.update(self._walk_paths(full_dir))
         
-        return list(paths)
+        return paths
 
     def _search_paths(self):
         paths = []
@@ -48,12 +51,17 @@ class Importer:
         paths.extend(user_paths)
         return paths
 
-    def _resolve_module_path(self, module_name: str) -> str:
+    def _resolve_module_path(self, module_name: str, submodule_name: str = None) -> (str, bool):
         for path in self.search_paths:
             potential_path = os.path.join(path, module_name + ".fun")
             if os.path.exists(potential_path):
-                return potential_path
-        return None
+                return potential_path, False
+            if submodule_name is not None:
+                potential_path = os.path.join(path, module_name, submodule_name + ".fun")
+                if os.path.exists(potential_path):
+                    return potential_path, True
+
+        raise FileNotFoundError(f"Module {module_name} not found in search paths")
 
 def write_file(data, filename, extension, root_dir = "./bin/") -> str:
     data_file = os.path.join(root_dir, pathlib.Path(filename).stem + extension)
@@ -62,7 +70,6 @@ def write_file(data, filename, extension, root_dir = "./bin/") -> str:
     
     return data_file
 
-# def compile_file(file_name, module_cache: dict, symbol_table: SymbolTable, is_main: bool = False):
 def compile_file(file_name, importer: Importer, symbol_table: SymbolTable, is_main: bool = False):
     # Read source code from file
     with open(file_name, "r") as f:
@@ -107,7 +114,7 @@ def compile_file(file_name, importer: Importer, symbol_table: SymbolTable, is_ma
                 if module_ident_node.token.type != TokenType.IDENTIFIER:
                     raise Exception("Invalid module name in import statement")
                 module_name = module_ident_node.token.value
-                imported_module, imported_symbols = importer.import_module(module_name)
+                imported_module, imported_symbols, module_name, dir_found = importer.import_module(module_name)
 
                 # Alias namespace
                 if module_ident_node.module_as_name:
@@ -121,14 +128,14 @@ def compile_file(file_name, importer: Importer, symbol_table: SymbolTable, is_ma
                         symbol_table[func.name] = ir.Function(module, func.function_type, name=func.name)
         elif node.token.type == TokenType.FROM:
             import_node = node.children[0]
-            module_name = node.module_name.value
-            imported_module, imported_symbols = importer.import_module(module_name)
+            root_module_name = node.module_name.value
             for module_ident_node in import_node.children:
+                imported_module, imported_symbols, module_name, dir_found = importer.import_module(root_module_name, module_ident_node.token.value)
                 if module_ident_node.token.type != TokenType.IDENTIFIER and module_ident_node.token.type != TokenType.STAR:
                     raise Exception("Invalid module name in from import statement")
-                
+
                 # We are importing all symbols
-                if module_ident_node.token.type == TokenType.STAR:
+                if module_ident_node.token.type == TokenType.STAR:# or dir_found:
                     # Star import: import all symbols from the module
                     for func in imported_module.functions:
                         if func.name not in module.globals and "__init__" not in func.name:
@@ -137,8 +144,20 @@ def compile_file(file_name, importer: Importer, symbol_table: SymbolTable, is_ma
                             symbol_table[local_func_name] = ir.Function(module, func.function_type, name=func.name)
                     continue
 
+                # Namespace the imported module from the directory
+                if dir_found:
+                    # Is this an "as" alias?
+                    if module_ident_node.module_as_name:
+                        module_name = module_ident_node.module_as_name.value
+                    symbol_table[module_name] = imported_symbols
+                    for func in imported_module.functions:
+                        if func.name not in module.globals and "__init__" not in func.name:
+                            # Define a declaration for the imported function in the current module to later use with llvm linking resolver
+                            symbol_table[func.name] = ir.Function(module, func.function_type, name=func.name)
+                    continue
+
                 # We are importing a specific function
-                # Get local function name (with alias if provided)
+                # Get local function name (with "as" alias if provided)
                 local_func_name = module_ident_node.token.value
                 if module_ident_node.module_as_name:
                     local_func_name = module_ident_node.module_as_name.value
@@ -157,7 +176,6 @@ def compile_file(file_name, importer: Importer, symbol_table: SymbolTable, is_ma
             node.codegen(wrap_builder, module, symbol_table)
     
     wrap_builder.ret_void()
-    module_cache[file_name] = module
     return module
 
 if __name__ == "__main__":

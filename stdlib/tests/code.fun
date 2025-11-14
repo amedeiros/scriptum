@@ -280,3 +280,8 @@ imported_alias()
 from import_all_module import *
 star_imported_function()
 another_star_imported_function()
+
+# from directory import
+from directory_module import nested_module, another_nested_module as nested_alias
+nested_module.dir_function()
+nested_alias.another_dir_func()
