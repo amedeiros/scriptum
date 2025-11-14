@@ -19,12 +19,12 @@ build:
 	mv $(BUILD_DIR)/$(DYLIB_NAME) $(LIB_DIR)
 
 # Compile the code using the scriptum compiler
-compile:
+compile: clean build
 	$(PYTHON) -m $(SCRIPTUM_COMPILER) $(CODE_FILE)
 
 # Run the compiled code
 run:
-	DYLD_LIBRARY_PATH=$(LIB_DIR):$$DYLD_LIBRARY_PATH $(BIN_DIR)/code
+	export DYLD_LIBRARY_PATH=$(LIB_DIR):$$DYLD_LIBRARY_PATH $(BIN_DIR)/code
 
 # Clean up build artifacts
 clean:

@@ -101,7 +101,7 @@ let fact = -> (x: int): int {
   if (x <= 1) {
     return 1
   }
-  
+
   return x * fact(x - 1)
 }
 printf("Factorial 5: %d\n", fact(5))
@@ -285,3 +285,35 @@ another_star_imported_function()
 from directory_module import nested_module, another_nested_module as nested_alias
 nested_module.dir_function()
 nested_alias.another_dir_func()
+
+let for_int = -> (
+    enumerable: array[int],
+    callback: callable[int, int],
+    start: int = 0,
+    stop: int = -2,
+    step: int = 1
+) {
+  # If stop is -2, set it to the size of the enumerable
+  if (stop == -2) {
+    stop = alen(enumerable)
+  }
+
+  while (start < stop) {
+    let item = enumerable[start]
+    callback(start, item)
+    start = start + step
+  }
+}
+
+for_int(arr, -> (index: int, item: int) {
+  printf("Index %d: %d\n", index, item)
+})
+pp_array(arr)
+
+let funct_default_param = -> (x: int = 5, y: int = 10): int {
+  let sum = 0
+  sum = sum + x + y
+  return sum
+}
+
+printf("Default params no args: %d\n", funct_default_param())
