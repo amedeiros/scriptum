@@ -1,0 +1,5 @@
+# This file contains builtins that are always available without import.
+from io import puts, printf
+from string import strcat, strcmp, strlen, strcpy
+from system import exit, sizeof
+from array import *

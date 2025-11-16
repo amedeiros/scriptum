@@ -223,6 +223,8 @@ class Parser:
     def _parse_statement(self):
         if self._check(TokenType.LET):
             return self._parse_let_statement()
+        elif self._check(TokenType.FOREIGN):
+            return self._parse_foreign_statement()
         elif self._check(TokenType.RETURN):
             return self._parse_return_statement()
         else:
@@ -243,6 +245,33 @@ class Parser:
 
         return let
     
+    def _parse_foreign_statement(self) -> ForeignNode:
+        # This is similar to parsing a function literal minus the body.
+
+        foreign = ForeignNode(self.current_token)
+        self._consume(TokenType.FOREIGN)
+
+        if self._check(TokenType.IDENTIFIER):
+            ident = self._parse_identifier()
+            foreign.name = ident.token.value
+            foreign.identifier = ident
+            # foreign.children.append(ident)
+        else:
+            self._error(self.current_token, "expected identifier after 'foreign'")
+
+        self._consume(TokenType.ASSIGN)
+        self._consume(TokenType.FUNCTION)
+
+        if self._consume(TokenType.LPAREN):
+            foreign.children = self._parse_function_params()
+
+        # Parse return type defaults to void
+        if self._check(TokenType.COLON):
+            self._consume(TokenType.COLON)
+            foreign.static_return_type = self._parse_static_type()
+
+        return foreign
+
     def _parse_return_statement(self) -> ReturnNode:
         return_stmt = ReturnNode(self.current_token)
         self._consume(TokenType.RETURN)
@@ -421,26 +450,26 @@ class Parser:
         return import_node
     
     def _parse_static_type(self) -> TokenType:
-        if self._check(TokenType.TYPE_INT):
-            self._advance()
-            return TokenType.TYPE_INT
-        if self._check(TokenType.TYPE_FLOAT):
-            self._advance()
-            return TokenType.TYPE_FLOAT
-        if self._check(TokenType.TYPE_STRING):
-            self._advance()
-            return TokenType.TYPE_STRING
-        if self._check(TokenType.TYPE_BOOL):
-            self._advance()
-            return TokenType.TYPE_BOOL
-        if self._check(TokenType.TYPE_ARRAY):
-            self._advance()
-            return TokenType.TYPE_ARRAY
-        if self._check(TokenType.TYPE_CALLABLE):
-            self._advance()
-            return TokenType.TYPE_CALLABLE
-
-        self._error(self.current_token, f"expected type annotation (int, float, str) found {self.current_token.value} instead")
+        if self._check(TokenType.IDENTIFIER):
+            type_token = self.current_token
+            self._consume(TokenType.IDENTIFIER)
+            if type_token.value == "int":
+                return TokenType.TYPE_INT
+            elif type_token.value == "float":
+                return TokenType.TYPE_FLOAT
+            elif type_token.value == "str":
+                return TokenType.TYPE_STRING
+            elif type_token.value == "bool":
+                return TokenType.TYPE_BOOL
+            elif type_token.value == "array":
+                return TokenType.TYPE_ARRAY
+            elif type_token.value == "void":
+                return TokenType.TYPE_VOID
+            elif type_token.value == "callable":
+                return TokenType.TYPE_CALLABLE
+            else:
+                self._error(type_token, f"expected type annotation (int, float, str, bool, array, void, callable) found {type_token.value} instead")
+        _self._error(self.current_token, f"expected type annotation (int, float, str, bool, array, void, callable) found {self.current_token.value} instead")
 
     def _match(self, types) -> bool:
         if not isinstance(types, list):

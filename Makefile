@@ -32,3 +32,5 @@ clean:
 
 test:
 	$(PYTHON) -m pytest tests
+
+# export DYLD_LIBRARY_PATH=./ffi/lib:$DYLD_LIBRARY_PATH
