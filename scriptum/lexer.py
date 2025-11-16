@@ -6,6 +6,7 @@ class TokenType(enum.Enum):
     IDENTIFIER = "IDENTIFIER"
     RETURN     = "RETURN"
     LET        = "LET"
+    FOREIGN    = "FOREIGN"
     DOT        = "DOT"
     FUNCTION   = "FUNCTION"
     COLON      = "COLON"
@@ -45,7 +46,6 @@ class TokenType(enum.Enum):
     RPAREN = "RPAREN"
 
     # Native Types
-    NUMBER = "NUMBER"
     STRING = "STRING"
     INT    = "INT"
     FLOAT  = "FLOAT"
@@ -53,12 +53,12 @@ class TokenType(enum.Enum):
     FALSE  = "FALSE"
 
     # Static Types
-    TYPE_INT    = "TYPE_INT"
-    TYPE_FLOAT  = "TYPE_FLOAT"
-    TYPE_STRING = "TYPE_STRING"
-    TYPE_BOOL   = "TYPE_BOOL"
-    TYPE_ARRAY  = "TYPE_ARRAY"
-    TYPE_VOID   = "TYPE_VOID"
+    TYPE_INT      = "TYPE_INT"
+    TYPE_FLOAT    = "TYPE_FLOAT"
+    TYPE_STRING   = "TYPE_STRING"
+    TYPE_BOOL     = "TYPE_BOOL"
+    TYPE_ARRAY    = "TYPE_ARRAY"
+    TYPE_VOID     = "TYPE_VOID"
     TYPE_CALLABLE = "TYPE_CALLABLE"
 
     # Importing
@@ -68,40 +68,35 @@ class TokenType(enum.Enum):
 
 EOF      = "\0"
 KEYWORDS = {
-    "if":     TokenType.IF,
-    "else":   TokenType.ELSE,
-    "while":  TokenType.WHILE,
-    "return": TokenType.RETURN,
-    "let":    TokenType.LET,
-    "and":    TokenType.AND,
-    "or":     TokenType.OR,
-    "true":   TokenType.TRUE,
-    "false":  TokenType.FALSE,
-    "int":    TokenType.TYPE_INT,
-    "float":  TokenType.TYPE_FLOAT,
-    "str":    TokenType.TYPE_STRING,
-    "bool":   TokenType.TYPE_BOOL,
-    "array":  TokenType.TYPE_ARRAY,
-    "void":   TokenType.TYPE_VOID,
-    "callable": TokenType.TYPE_CALLABLE,
-    "import": TokenType.IMPORT,
-    "from":   TokenType.FROM,
-    "as":     TokenType.AS,
+    "if":       TokenType.IF,
+    "else":     TokenType.ELSE,
+    "while":    TokenType.WHILE,
+    "return":   TokenType.RETURN,
+    "let":      TokenType.LET,
+    "foreign":  TokenType.FOREIGN,
+    "import":   TokenType.IMPORT,
+    "from":     TokenType.FROM,
+    "as":       TokenType.AS,
+    "and":      TokenType.AND,
+    "or":       TokenType.OR,
+    "true":     TokenType.TRUE,
+    "false":    TokenType.FALSE,
 }
 
 
 class Token:
-    def __init__(self, type: TokenType, value: any, row: int, column: int):
+    def __init__(self, type: TokenType, value: any, row: int, column: int, file_name: str = ""):
         self.type   = type
         self.value  = value
         self.row    = row
         self.column = column
+        self.file_name = file_name
 
     def __repr__(self):
-        return f"Token({self.type}, {self.value}, {self.row}, {self.column})"
+        return f"Token({self.type}, {self.value}, {self.row}, {self.column}, {self.file_name})"
     
     def line_number(self):
-        return f"{self.row}:{self.column}"
+        return f"{self.file_name} {self.row}:{self.column}"
 
 
 class LexerError(Exception):
@@ -109,12 +104,13 @@ class LexerError(Exception):
 
 
 class Lexer:
-    def __init__(self, source_code, ignore_comments: bool = True):
+    def __init__(self, source_code, file_name: str = "", ignore_comments: bool = True):
         self.source_code     = source_code
         self.ignore_comments = ignore_comments
         self.source_len      = len(source_code)
+        self.file_name       = file_name
         self.column          = 0
-        self.row             = 1
+        self.row             = 0
         self.ip              = 0
 
     # Begin Public API
@@ -128,7 +124,7 @@ class Lexer:
     def next_token(self) -> Token:
         self._consume_ws()
         if not self._inbounds():
-            return Token(TokenType.EOF, EOF, self.row, self.column)
+            return Token(TokenType.EOF, EOF, self.row, self.column, self.file_name)
 
         current = self._current_char()
         peek = self._peek()
@@ -144,59 +140,59 @@ class Lexer:
         if current.isnumeric():
             return self._consume_number()
         if current == ";":
-            return Token(TokenType.SEMICOLON, *self._consume())
+            return Token(TokenType.SEMICOLON, *self._consume(), self.file_name)
         if current == "%":
-            return Token(TokenType.MODULO, *self._consume())
+            return Token(TokenType.MODULO, *self._consume(), self.file_name)
         if current == ",":
-            return Token(TokenType.COMMA, *self._consume())
+            return Token(TokenType.COMMA, *self._consume(), self.file_name)
         if current == ":":
-            return Token(TokenType.COLON, *self._consume())
+            return Token(TokenType.COLON, *self._consume(), self.file_name)
         if current == "[":
-            return Token(TokenType.LBRACK, *self._consume())
+            return Token(TokenType.LBRACK, *self._consume(), self.file_name)
         if current == "]":
-            return Token(TokenType.RBRACK, *self._consume())
+            return Token(TokenType.RBRACK, *self._consume(), self.file_name)
         if current == "(":
-            return Token(TokenType.LPAREN, *self._consume())
+            return Token(TokenType.LPAREN, *self._consume(), self.file_name)
         if current == ")":
-            return Token(TokenType.RPAREN, *self._consume())
+            return Token(TokenType.RPAREN, *self._consume(), self.file_name)
         if current == "{":
-            return Token(TokenType.LBRACE, *self._consume())
+            return Token(TokenType.LBRACE, *self._consume(), self.file_name)
         if current == "}":
-            return Token(TokenType.RBRACE, *self._consume())
+            return Token(TokenType.RBRACE, *self._consume(), self.file_name)
         if current == "+":
-            return Token(TokenType.PLUS, *self._consume())
+            return Token(TokenType.PLUS, *self._consume(), self.file_name)
         if current == "*":
-            return Token(TokenType.STAR, *self._consume())
+            return Token(TokenType.STAR, *self._consume(), self.file_name)
         if current == "/":
-            return Token(TokenType.SLASH, *self._consume())
+            return Token(TokenType.SLASH, *self._consume(), self.file_name)
         if current == "=":
             if peek and peek == "=":
                 _, row, column = self._consume() # consume =
                 self._consume() # consume =
-                return Token(TokenType.EQUAL, "==", row, column)
-            return Token(TokenType.ASSIGN, *self._consume())
+                return Token(TokenType.EQUAL, "==", row, column, self.file_name)
+            return Token(TokenType.ASSIGN, *self._consume(), self.file_name)
         if current == "!":
             if peek and peek == "=":
                 _, row, column = self._consume() # consume !
                 self._consume() # consume =
-                return Token(TokenType.NOT_EQ, "!=", row, column)
-            return Token(TokenType.BANG, *self._consume())
+                return Token(TokenType.NOT_EQ, "!=", row, column, self.file_name)
+            return Token(TokenType.BANG, *self._consume(), self.file_name)
         if current == "<":
             if peek and peek == "=":
                 _, row, column = self._consume() # consume <
                 self._consume() # consume =
-                return Token(TokenType.LT_EQ, "<=", row, column)
-            return Token(TokenType.LT, *self._consume())
+                return Token(TokenType.LT_EQ, "<=", row, column, self.file_name)
+            return Token(TokenType.LT, *self._consume(), self.file_name)
         if current == ">":
             if peek and peek == "=":
                 _, row, column = self._consume() # consume >
                 self._consume() # consume =
-                return Token(TokenType.GT_EQ, ">=", row, column)
-            return Token(TokenType.GT, *self._consume())
+                return Token(TokenType.GT_EQ, ">=", row, column, self.file_name)
+            return Token(TokenType.GT, *self._consume(), self.file_name)
         if current == ".":
             if peek and peek.isnumeric():
                 return self._consume_number()
-            return Token(TokenType.DOT, *self._consume())
+            return Token(TokenType.DOT, *self._consume(), self.file_name)
         if current == "-":
             # Number
             if peek and peek.isnumeric():
@@ -205,10 +201,10 @@ class Lexer:
             if peek and peek == ">":
                 _, row, column = self._consume() # consume -
                 self._consume() # consume >
-                return Token(TokenType.FUNCTION, "->", row, column)
+                return Token(TokenType.FUNCTION, "->", row, column, self.file_name)
             # Minus
             return Token(TokenType.MINUS, *self._consume())
-        return Token(TokenType.EOF, EOF, self.row, self.column)
+        return Token(TokenType.EOF, EOF, self.row, self.column, self.file_name)
 
     # Begin Private API
 
@@ -246,7 +242,7 @@ class Lexer:
             char, _, _ = self._consume()
 
         comment = self.source_code[start:self.ip]
-        return Token(TokenType.COMMENT, comment, row, column)
+        return Token(TokenType.COMMENT, comment, row, column, self.file_name)
 
     def _consume_identifier(self):
         start = self.ip
@@ -257,8 +253,8 @@ class Lexer:
 
         identifier = self.source_code[start:self.ip]
         if identifier in KEYWORDS:
-            return Token(KEYWORDS[identifier], identifier, row, column)
-        return Token(TokenType.IDENTIFIER, identifier, row, column)
+            return Token(KEYWORDS[identifier], identifier, row, column, self.file_name)
+        return Token(TokenType.IDENTIFIER, identifier, row, column, self.file_name)
 
     def _consume_number(self) -> Token:
         start = self.ip
@@ -271,11 +267,11 @@ class Lexer:
         number = self.source_code[start:self.ip]
         try:
             number = int(number)
-            return Token(TokenType.INT, number, row, column)
+            return Token(TokenType.INT, number, row, column, self.file_name)
         except ValueError:
             try:
                 number = float(number)
-                return Token(TokenType.FLOAT, number, row, column)
+                return Token(TokenType.FLOAT, number, row, column, self.file_name)
             except ValueError:
                 raise LexerError(f"Unknown expected a number found {number} instead at {row}:{column}")
 
@@ -292,4 +288,4 @@ class Lexer:
         
         string = self.source_code[start+1:self.ip-1] # skip over "
         string = bytes(string, "utf-8").decode("unicode_escape")
-        return Token(TokenType.STRING, string, row, column)
+        return Token(TokenType.STRING, string, row, column, self.file_name)

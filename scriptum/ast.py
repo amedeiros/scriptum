@@ -116,7 +116,7 @@ class NumberNode(ASTNode):
         elif self.token.type == TokenType.FLOAT:
             return ir.FloatType()
 
-        raise CodeGenError(f"Unknown number type {self.token.type}")
+        raise CodeGenError(f"Unknown number type {self.token.type} at {self.token.line_number()}")
 
     def codegen(self, builder, module, symbol_table):
         if self.token.type == TokenType.INT:
@@ -124,7 +124,7 @@ class NumberNode(ASTNode):
         elif self.token.type == TokenType.FLOAT:
             return ir.Constant(ir.FloatType(), self.token.value)
         
-        raise CodeGenError(f"Unknown number type {self.token.type}")
+        raise CodeGenError(f"Unknown number type {self.token.type} at {self.token.line_number()}")
     
 class DotNode(ASTNode):
     def codegen(self, builder: IRBuilder, module: Module, symbol_table: dict[str, any]):
@@ -140,12 +140,12 @@ class DotNode(ASTNode):
                 mangled_name = right.mangled_name(namespace)
                 func = namespace.get(mangled_name)
             if func is None:
-                raise CodeGenError(f"Undefined function: {mangled_name}")
+                raise CodeGenError(f"Undefined function: {mangled_name} at {right.token.line_number()}")
             # Generate argument values
             arg_values = [child.codegen(builder, module, symbol_table) for child in right.children]
             return builder.call(func.variable_addr, arg_values)
         else:
-            raise CodeGenError("DotNode only supports function calls currently")
+            raise CodeGenError(f"DotNode only supports function calls currently at {self.token.line_number()}")
 
 class SubscriptNode(ASTNode):
     static_type: ir.Type
@@ -161,7 +161,7 @@ class SubscriptNode(ASTNode):
         # Determine the static type of the array elements
         self.static_type = array_static_type_from_identifier(base_node, symbol_table)
         if self.static_type is None:
-            raise CodeGenError("Cannot subscript array with unknown element type")
+            raise CodeGenError(f"Cannot subscript array with unknown element type at {self.token.line_number()}")
 
         # Select the appropriate get function based on the static type
         get_array_func = None
@@ -176,7 +176,7 @@ class SubscriptNode(ASTNode):
         elif self.static_type == ir.PointerType(vector_struct_ty):
             get_array_func = symbol_table["array_array_get"].variable_addr
         else:
-            raise CodeGenError(f"Unsupported array element type for subscripting: {self.static_type}")
+            raise CodeGenError(f"Unsupported array element type for subscripting: {self.static_type} at {self.token.line_number()}")
 
         return builder.call(get_array_func, [array_ptr, index])
 
@@ -206,7 +206,7 @@ class ArrayReplicationNode(ASTNode):
         elif self.static_type == ir.PointerType(vector_struct_ty):
             create_array_func = symbol_table["create_array_array_from_value"].variable_addr
         else:
-            raise CodeGenError(f"Unsupported array element type for replication: {self.static_type}")
+            raise CodeGenError(f"Unsupported array element type for replication: {self.static_type} at {self.token.line_number()}")
 
         # Create the new replicated array
         vector_struct_ptr = builder.call(create_array_func, [val, count])
@@ -219,10 +219,10 @@ class ArrayLiteralNode(ASTNode):
 
     def codegen(self, builder, module, symbol_table):
         if len(self.children) == 0 and self.static_type is None:
-            raise CodeGenError("Cannot infer type of empty array literal")
+            raise CodeGenError(f"Cannot infer type of empty array literal at {self.token.line_number()}")
         elif len(self.children) == 0:
             # Not supported right now.
-            raise CodeGenError("Cannot create empty array literal without a known static type")
+            raise CodeGenError(f"Cannot create empty array literal without a known static type at {self.token.line_number()}")
 
         # Generate code for each element
         elem_values = [child.codegen(builder, module, symbol_table) for child in self.children]
@@ -248,7 +248,7 @@ class ArrayLiteralNode(ASTNode):
             create_array_func = symbol_table["create_array_array"].variable_addr
             array_set_func = symbol_table["array_array_set"].variable_addr
         else:
-            raise CodeGenError(f"Unsupported array element type: {elem_type}")
+            raise CodeGenError(f"Unsupported array element type: {elem_type} at {self.token.line_number()}")
 
         # Create the array
         vector_struct_ptr = builder.call(create_array_func, [ir.Constant(ir.IntType(64), len(elem_values))])
@@ -279,7 +279,6 @@ class StringNode(ASTNode):
             builder.store(ir.Constant(ir.IntType(8), b), ptr)
         
         return builder.bitcast(local_str, ir.PointerType(ir.IntType(8)))
-        # return local_str
 
 class BooleanNode(ASTNode):
     def __init__(self, token: Token, value: bool):
@@ -307,12 +306,12 @@ class IdentifierNode(ASTNode):
         if type:
             return type
 
-        raise CodeGenError(f"Unknown static type for identifier {self.token.value}")
+        raise CodeGenError(f"Unknown static type for identifier {self.token.value} at {self.token.line_number()}")
 
     def codegen(self, builder, module, symbol_table):
         var_addr = symbol_table.get(self.token.value)
         if var_addr is None:
-            raise CodeGenError(f"Undefined variable: {self.token.value}")
+            raise CodeGenError(f"Undefined variable: {self.token.value} at {self.token.line_number()}")
         else:
             var_addr = var_addr.variable_addr
         
@@ -368,7 +367,7 @@ class FunctionNode(ASTNode):
         type = self._gentype_from_token(self.static_return_type)
         if type:
             return type
-        raise CodeGenError(f"Unknown static return type for function {self.name}")
+        raise CodeGenError(f"Unknown static return type for function {self.name} at {self.token.line_number()}")
 
     def mangled_name(self, symbol_table):
         context = symbol_table.get("__context__")
@@ -430,7 +429,7 @@ class ArrayRemoveNode(ASTNode):
         # We want the static type of the array elements not the value passed.
         static_type = array_static_type_from_identifier(array_node, symbol_table)
         if static_type is None:
-            raise CodeGenError(f"Cannot determine static type of array for append: {array_node.token.value}")
+            raise CodeGenError(f"Cannot determine static type of array for append: {array_node.token.value} at {self.token.line_number()}")
         
         remove_func = None
         if static_type == ir.IntType(64):
@@ -444,7 +443,7 @@ class ArrayRemoveNode(ASTNode):
         elif ASTNode.is_string_value(static_type):
             remove_func = symbol_table["string_array_remove"].variable_addr
         else:
-            raise CodeGenError(f"Unsupported array element type for remove: {static_type}")
+            raise CodeGenError(f"Unsupported array element type for remove: {static_type} at {self.token.line_number()}")
         
         return builder.call(remove_func, [array_ptr, index])
 
@@ -458,7 +457,7 @@ class ArrayIndexOfNode(ASTNode):
         # We want the static type of the array elements not the value passed.
         static_type = array_static_type_from_identifier(array_node, symbol_table)
         if static_type is None:
-            raise CodeGenError(f"Cannot determine static type of array for index_of: {array_node.token.value}")
+            raise CodeGenError(f"Cannot determine static type of array for index_of: {array_node.token.value} at {self.token.line_number()}")
 
         index_of_func = None
         if static_type == ir.IntType(64):
@@ -472,7 +471,7 @@ class ArrayIndexOfNode(ASTNode):
         elif ASTNode.is_string_value(static_type):
             index_of_func = symbol_table["string_array_index_of"].variable_addr
         else:
-            raise CodeGenError(f"Unsupported array element type for index_of: {static_type}")
+            raise CodeGenError(f"Unsupported array element type for index_of: {static_type} at {self.token.line_number()}")
 
         return builder.call(index_of_func, [array_ptr, value])
 
@@ -488,7 +487,7 @@ class ArrayInsertNode(ASTNode):
         # We want the static type of the array elements not the value passed.
         static_type = array_static_type_from_identifier(array_node, symbol_table)
         if static_type is None:
-            raise CodeGenError(f"Cannot determine static type of array for pop: {array_node.token.value}")
+            raise CodeGenError(f"Cannot determine static type of array for insert: {array_node.token.value} at {self.token.line_number()}")
         
         insert_func = None
         if static_type == ir.IntType(64):
@@ -502,7 +501,7 @@ class ArrayInsertNode(ASTNode):
         elif ASTNode.is_string_value(static_type):
             insert_func = symbol_table["string_array_insert"].variable_addr
         else:
-            raise CodeGenError(f"Unsupported array element type for insert: {static_type}")
+            raise CodeGenError(f"Unsupported array element type for insert: {static_type} at {self.token.line_number()}")
         
         builder.call(insert_func, [array_ptr, index, value])
 
@@ -514,7 +513,7 @@ class ArrayPopNode(ASTNode):
         # We want the static type of the array elements not the value passed.
         static_type = array_static_type_from_identifier(array_node, symbol_table)
         if static_type is None:
-            raise CodeGenError(f"Cannot determine static type of array for pop: {array_node.token.value}")
+            raise CodeGenError(f"Cannot determine static type of array for pop: {array_node.token.value} at {self.token.line_number()}")
         
         pop_func = None
         if static_type == ir.IntType(64):
@@ -528,7 +527,7 @@ class ArrayPopNode(ASTNode):
         elif ASTNode.is_string_value(static_type):
             pop_func = symbol_table["string_array_pop"].variable_addr
         else:
-            raise CodeGenError(f"Unsupported array element type for pop: {static_type}")
+            raise CodeGenError(f"Unsupported array element type for pop: {static_type} at {self.token.line_number()}")
         
         return builder.call(pop_func, [array_ptr])
 
@@ -542,7 +541,7 @@ class AppendNode(ASTNode):
         # We want the static type of the array elements not the value passed.
         static_type = array_static_type_from_identifier(array_node, symbol_table)
         if static_type is None:
-            raise CodeGenError(f"Cannot determine static type of array for append: {array_node.token.value}")
+            raise CodeGenError(f"Cannot determine static type of array for append: {array_node.token.value} at {self.token.line_number()}")
 
         append_func = None
         if static_type == ir.IntType(64):
@@ -556,11 +555,11 @@ class AppendNode(ASTNode):
         elif ASTNode.is_string_value(static_type):
             append_func = symbol_table["string_array_push_back"].variable_addr
         else:
-            raise CodeGenError(f"Unsupported array element type for append: {static_type}")
+            raise CodeGenError(f"Unsupported array element type for append: {static_type} at {self.token.line_number()}")
 
         # Validate arg matches
         if value.type != static_type:
-            raise CodeGenError(f"Type mismatch in append: array element type {static_type} vs value type {value.type}")
+            raise CodeGenError(f"Type mismatch in append: array element type {static_type} vs value type {value.type} at {self.token.line_number()}")
 
         builder.call(append_func, [array_ptr, value])
 
@@ -572,7 +571,7 @@ class FunctionCallNode(ASTNode):
         func_name = self.token.value
         symbol_entry = symbol_table.get(func_name)
         if symbol_entry is None:
-            raise CodeGenError(f"Undefined function: {func_name}")
+            raise CodeGenError(f"Undefined function: {func_name} {self.token.line_number()} at {self.token.line_number()}")
 
         # Get arguments
         func = symbol_entry.variable_addr
@@ -590,7 +589,7 @@ class FunctionCallNode(ASTNode):
         arg_len = len(self.children)
 
         if not var_arg_func and param_len < arg_len:
-            raise CodeGenError(f"Too many arguments provided for function {func_name}: expected {param_len}, got {arg_len}")
+            raise CodeGenError(f"Too many arguments provided for function {func_name}: expected {param_len}, got {arg_len} in {self.token.line_number()}")
 
         if param_len > arg_len:
             # Check for default values
@@ -606,7 +605,7 @@ class FunctionCallNode(ASTNode):
                         val = arg_node.default_value.codegen(builder, module, symbol_table)
                         args.append(val)
                     else:
-                        raise CodeGenError(f"Missing argument {arg_node.token.value} for function {func_name} and no default value provided")
+                        raise CodeGenError(f"Missing argument {arg_node.token.value} for function {func_name} and no default value provided at {self.token.line_number()}")
         else:
             for arg in self.children:
                 val = arg.codegen(builder, module, symbol_table)
@@ -617,7 +616,7 @@ class FunctionCallNode(ASTNode):
         except Exception as e:
             _args = args
             breakpoint()
-            raise CodeGenError(f"Error calling function {self.token.value}: {e}")
+            raise CodeGenError(f"Error calling function {self.token.value}: {e} with arguments {args} at {self.token.line_number()}")
 
 class BlockNode(ASTNode):
     def __init__(self, token: Token):
@@ -633,11 +632,10 @@ class BinaryOpNode(ASTNode):
     def __init__(self, token: Token):
         super().__init__(token)
 
-    @staticmethod
-    def numeric_binop(builder, left, right, op_float, op_int, op_name):
+    def numeric_binop(self, builder, left, right, op_float, op_int, op_name):
         # Disallow string operands
         if ASTNode.is_string_value(left) or ASTNode.is_string_value(right):
-            raise CodeGenError(f"Cannot {op_name} string values")
+            raise CodeGenError(f"Cannot {op_name} string values at {self.token.line_number()}")
         # Promote to float if needed
         if left.type == ir.FloatType() or right.type == ir.FloatType():
             left = builder.sitofp(left, ir.FloatType()) if left.type != ir.FloatType() else left
@@ -645,7 +643,7 @@ class BinaryOpNode(ASTNode):
             return op_float(left, right)
         # Require matching types
         if left.type != right.type:
-            raise CodeGenError(f"Type mismatch in {op_name}: {left.type} vs {right.type}")
+            raise CodeGenError(f"Type mismatch in {op_name}: {left.type} vs {right.type} at {self.token.line_number()}")
         return op_int(left, right)
 
     def codegen(self, builder, module, symbol_table):
@@ -705,9 +703,9 @@ class BinaryOpNode(ASTNode):
                 right = builder.sitofp(right, ir.FloatType()) if right.type != ir.FloatType() else right
                 return builder.fcmp_ordered(op, left, right)
             elif left.type != right.type:
-                raise CodeGenError(f"Type mismatch in comparison: {left.type} vs {right.type}")
+                raise CodeGenError(f"Type mismatch in comparison: {left.type} vs {right.type} at {self.token.line_number()}")
             return builder.icmp_signed(op, left, right)
-        raise CodeGenError(f"Unknown infix operator {infix_op}")
+        raise CodeGenError(f"Unknown infix operator {infix_op} at {self.token.line_number()}")
 
 class ReturnNode(ASTNode):
     def __init__(self, token: Token):
@@ -808,12 +806,50 @@ class AssignNode(ASTNode):
             elif ASTNode.is_string_value(static_type):
                 set_array_func = symbol_table["string_array_set"].variable_addr
             else:
-                raise CodeGenError(f"Unsupported array element type for assignment: {static_type}")
+                raise CodeGenError(f"Unsupported array element type for assignment: {static_type} at {self.token.line_number()}")
 
             # Call the set function
             builder.call(set_array_func, [array_ptr, index, value])
         else:
-            raise CodeGenError("Invalid assignment target")
+            raise CodeGenError(f"Invalid assignment target at {self.token.line_number()}")
+
+
+class ForeignNode(ASTNode):
+    static_return_type: Literal[TokenType.TYPE_INT, TokenType.TYPE_FLOAT,
+                                TokenType.TYPE_STRING, TokenType.TYPE_BOOL,
+                                TokenType.TYPE_ARRAY, TokenType.TYPE_VOID]
+    identifier: Token | None
+    name: str | None
+
+    def __init__(self, token: Token):
+        super().__init__(token)
+        self.name = None
+        self.identifier = None
+        self.static_return_type = TokenType.TYPE_VOID
+
+    def gentype(self) -> ir.Type:
+        type = self._gentype_from_token(self.static_return_type)
+        if type:
+            return type
+        raise CodeGenError(f"Unknown static return type for foreign function {self.name} at {self.token.line_number()}")
+
+    def codegen(self, builder, module, symbol_table):
+        identifier = self.identifier.token.value
+        if identifier in symbol_table:
+            raise CodeGenError(f"Symbol {identifier} already defined in the current scope at {self.token.line_number()}")
+
+        var_arg = False
+        arg_types = []
+        for arg in self.children:
+            # we parse this as a default value in the function parsing "var_arg = true" and we can check for it here
+            if arg.token.value == "var_arg" and arg.default_value.token.value == "true":
+                var_arg = True
+            else:
+                arg_types.append(arg.gentype())
+
+        func_type = ir.FunctionType(self.gentype(), arg_types, var_arg=var_arg)
+        func = ir.Function(module, func_type, name=identifier)
+        symbol_table[identifier] = SymbolEntry(variable_addr=func, static_type=func_type, node=self)
 
 
 class LetNode(ASTNode):
@@ -826,7 +862,7 @@ class LetNode(ASTNode):
         value           = value_node.codegen(builder, module, symbol_table)
 
         if identifier_node.token.type != TokenType.IDENTIFIER:
-            raise CodeGenError("Invalid identifier")
+            raise CodeGenError(f"Invalid identifier in let statement at {self.token.line_number()}")
 
         if isinstance(value, ir.PointerType) or value_node.token.type in (TokenType.STRING, TokenType.FUNCTION, TokenType.LBRACK):
             var_addr = value
@@ -852,7 +888,7 @@ class LetNode(ASTNode):
             try:
                 identifier_node.static_type = value_node.gentype()
                 static_type = identifier_node.static_type
-            except Exception as e:
+            except Exception:
                 pass
 
         mangled_name = identifier_node.mangled_name(symbol_table)

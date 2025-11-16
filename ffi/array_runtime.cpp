@@ -510,7 +510,7 @@ extern "C" {
         }
     }
 
-    void reverse_array(void* array_ptr) {
+    void areverse(void* array_ptr) {
         if (!array_ptr) {
             throw std::invalid_argument("Null pointer provided");
         }
@@ -536,7 +536,7 @@ extern "C" {
         }
     }
 
-    void sort_array(void* array_ptr) {
+    void asort(void* array_ptr) {
         if (!array_ptr) {
             throw std::invalid_argument("Null pointer provided");
         }
@@ -559,7 +559,7 @@ extern "C" {
         }
     }   
 
-    void clear_array(void* array_ptr) {
+    void aclear(void* array_ptr) {
         if (!array_ptr) {
             throw std::invalid_argument("Null pointer provided");
         }

@@ -75,8 +75,16 @@ def compile_file(file_name, importer: Importer, symbol_table: SymbolTable, is_ma
     with open(file_name, "r") as f:
         code = f.read()
 
+    # Avoid re-importing builtins for stdlib files.
+    if "/stdlib/builtins.fun" not in file_name \
+        and "/stdlib/string.fun" not in file_name \
+        and "/stdlib/io.fun" not in file_name \
+        and "/stdlib/system.fun" not in file_name \
+        and "/stdlib/array.fun" not in file_name:
+        code = "from builtins import *\n" + code
+
     # Lex and parse the source code
-    lexer = Lexer(code)
+    lexer = Lexer(code, file_name=file_name)
     parser = Parser(lexer)
     ast = parser.parse()
 
@@ -135,12 +143,16 @@ def compile_file(file_name, importer: Importer, symbol_table: SymbolTable, is_ma
                     raise Exception("Invalid module name in from import statement")
 
                 # We are importing all symbols
-                if module_ident_node.token.type == TokenType.STAR:# or dir_found:
+                if module_ident_node.token.type == TokenType.STAR:
                     # Star import: import all symbols from the module
                     for func in imported_module.functions:
                         if func.name not in module.globals and "__init__" not in func.name:
                             # Define a declaration for the imported function in the current module to later use with llvm linking resolver
-                            local_func_name = func.name.split(module_name + "_")[1]
+                            if f"{module_name}_" in func.name:
+                                split_name = func.name.split(module_name + "_")
+                                local_func_name = split_name[1]
+                            else:
+                                local_func_name = func.name
                             symbol_table[local_func_name] = SymbolEntry(ir.Function(module, func.function_type, name=func.name), func.function_type)
                     continue
 
@@ -161,14 +173,20 @@ def compile_file(file_name, importer: Importer, symbol_table: SymbolTable, is_ma
                 local_func_name = module_ident_node.token.value
                 if module_ident_node.module_as_name:
                     local_func_name = module_ident_node.module_as_name.value
-                # Import function
+
+                # Import function with module name prefix
                 func_name = module_ident_node.mangled_name(imported_symbols)
+                func = imported_symbols.get(func_name)
+
+                # Try and get it unmangled it might be a foreign function.
+                if not func:
+                    func_name = module_ident_node.token.value
+                    func = imported_symbols.get(func_name)
+                if not func:
+                    raise Exception(f"Function {module_ident_node.token.value} not found in module {module_name}")
+
                 if func_name not in module.globals:
                     # Define a declaration for the imported function in the current module to later use with llvm linking resolver
-                    func = imported_symbols.get(func_name)
-                    if not func:
-                        raise Exception(f"Function {module_ident_node.token.value} not found in module {module_name}")
-
                     symbol_table[local_func_name] = SymbolEntry(ir.Function(module, func.variable_addr.function_type, name=func_name), func.variable_addr.function_type)
         elif node.token.type == TokenType.LET and node.children[0].token.type == TokenType.FUNCTION:
             # Function definition at module level
