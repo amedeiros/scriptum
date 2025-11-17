@@ -67,6 +67,7 @@ class Parser:
         self._register_prefix(TokenType.LBRACK, self._parse_array_literal)
         self._register_prefix(TokenType.IMPORT, self._parse_import_statement)
         self._register_prefix(TokenType.FROM, self._parse_from_statement)
+        self._register_prefix(TokenType.STAR, self._parse_prefix_expression)
 
     def _load_infix_parse_funcs(self) -> None:
         self._register_infix(TokenType.AND, self._parse_infix_expression)
@@ -102,7 +103,10 @@ class Parser:
         return statements
 
     def _parse_prefix_expression(self) -> PrefixNode:
-        expression = PrefixNode(self.current_token)
+        if self.current_token.type == TokenType.STAR and self.peek_token.type == TokenType.IDENTIFIER:
+            expression = PointerDereferenceNode(self.current_token)
+        else:
+            expression = PrefixNode(self.current_token)
         self._advance()
         expression.add_child(self._parse_expression(PREFIX))
         return expression
@@ -236,6 +240,11 @@ class Parser:
         # Parse let statement
         let = LetNode(self.current_token)
         self._consume(TokenType.LET)
+        is_pointer = False
+        if self._check(TokenType.STAR):
+            self._consume(TokenType.STAR)
+            is_pointer = True
+
         # Parse identifier
         identifier = self._parse_identifier()
         let.children.append(identifier)
@@ -244,7 +253,10 @@ class Parser:
         right_expr = self._parse_expression(LOWEST)
         let.children.append(right_expr)
         identifier.static_type = right_expr.static_type
-        self.symbol_table[identifier.token.value] = identifier.static_type
+        if identifier.static_type is not None:
+            identifier.static_type.is_pointer = is_pointer
+            right_expr.static_type.is_pointer = is_pointer
+            self.symbol_table[identifier.token.value] = identifier.static_type
         # Check for function definition and assign the identifier name to the function name
         if isinstance(let.children[len(let.children)-1], FunctionNode):
             let.children[len(let.children)-1].name = let.children[0].token.value

@@ -56,10 +56,11 @@ class StaticType:
         return llvm_type
 
 class SymbolEntry:
-    def __init__(self, variable_addr, static_type: ir.Type = None, node: "ASTNode" = None):
+    def __init__(self, variable_addr, static_type: ir.Type = None, node: "ASTNode" = None, is_pointer = False):
         self.variable_addr = variable_addr
         self.static_type = static_type
         self.node = node
+        self.is_pointer = is_pointer
 
 
 class SymbolTable(dict[str, SymbolEntry]):
@@ -312,11 +313,11 @@ class IdentifierNode(ASTNode):
         raise CodeGenError(f"Unknown static type for identifier {self.token.value} at {self.token.line_number()}")
 
     def codegen(self, builder, module, symbol_table):
-        var_addr = symbol_table.get(self.token.value)
-        if var_addr is None:
+        identifier = symbol_table.get(self.token.value)
+        if identifier is None:
             raise CodeGenError(f"Undefined variable: {self.token.value} at {self.token.line_number()}")
         else:
-            var_addr = var_addr.variable_addr
+            var_addr = identifier.variable_addr
         
         # If function return
         if isinstance(var_addr, ir.Function):
@@ -327,8 +328,9 @@ class IdentifierNode(ASTNode):
             (isinstance(var_addr.type, ir.types.PointerType) and var_addr.type.pointee == vector_struct_ty):
             return var_addr
         # Only load if it's a pointer to a non-array type
-        if isinstance(var_addr.type, ir.types.PointerType):
+        if isinstance(var_addr.type, ir.types.PointerType) and not identifier.is_pointer:
             return builder.load(var_addr)
+        
         # Otherwise return the loaded value
         return var_addr
 
@@ -385,7 +387,7 @@ class FunctionNode(ASTNode):
         func_builder = ir.IRBuilder(block)
 
         # Add the function itself to the scoped symbol table for recursion
-        scoped_table[self.mangled_name(scoped_table)] = SymbolEntry(variable_addr=func, static_type=self.gentype(), node=self)
+        scoped_table[self.mangled_name(scoped_table)] = SymbolEntry(variable_addr=func, static_type=self.gentype(), node=self, is_pointer=True)
 
         # Add parameters to symbol table
         for i, arg in enumerate(func.args):
@@ -393,9 +395,9 @@ class FunctionNode(ASTNode):
             static_type = None
             # If the argument is an array, store its element type
             if args[i].static_type.type == TokenType.TYPE_ARRAY:
-                static_type = args[i].callable_arg_types[0].gentype()
+                static_type = args[i].callable_arg_types[0]
             else:
-                static_type = args[i].gentype()
+                static_type = args[i].static_type
             # Create a local variable for the argument and store the value
             if isinstance(arg.type, ir.types.PointerType):
                 local_ptr = arg
@@ -403,7 +405,7 @@ class FunctionNode(ASTNode):
                 local_ptr = func_builder.alloca(arg.type, name=arg.name)
                 func_builder.store(arg, local_ptr)
             # Add the argument to the symbol table
-            scoped_table[arg.name] = SymbolEntry(local_ptr, static_type, args[i])
+            scoped_table[arg.name] = SymbolEntry(local_ptr, static_type.gentype(), args[i], is_pointer=static_type.is_pointer)
 
         # Codegen the function body.
         for node in self.children[1:]:
@@ -739,6 +741,14 @@ class WhileNode(ASTNode):
         # After loop block
         builder.position_at_start(after_block)
 
+
+class PointerDereferenceNode(ASTNode):
+    def codegen(self, builder, module, symbol_table):
+        pointer_value = self.children[0].codegen(builder, module, symbol_table)
+        if not isinstance(pointer_value.type, ir.types.PointerType):
+            raise CodeGenError(f"Cannot dereference non-pointer type {pointer_value.type} at {self.token.line_number()}")
+        return builder.load(pointer_value)
+
 class PrefixNode(ASTNode):
     def operator(self) -> TokenType:
         return self.token.type
@@ -816,7 +826,7 @@ class ForeignNode(ASTNode):
 
         func_type = ir.FunctionType(self.gentype(), arg_types, var_arg=var_arg)
         func = ir.Function(module, func_type, name=identifier)
-        symbol_table[identifier] = SymbolEntry(variable_addr=func, static_type=func_type, node=self)
+        symbol_table[identifier] = SymbolEntry(variable_addr=func, static_type=func_type, node=self, is_pointer=True)
 
 
 class LetNode(ASTNode):
@@ -843,11 +853,13 @@ class LetNode(ASTNode):
         static_type = None
         if value_node.static_type is not None:
             static_type = value_node.static_type.gentype()
+            is_pointer = value_node.static_type.is_pointer
         else:
             static_type = value.type
+            is_pointer = False
 
         mangled_name = identifier_node.mangled_name(symbol_table)
-        symbol_table[mangled_name] = SymbolEntry(var_addr, static_type, value_node)
+        symbol_table[mangled_name] = SymbolEntry(var_addr, static_type, value_node, is_pointer=is_pointer)
         return var_addr
 
 class ModuleIdentifierNode(ASTNode):
