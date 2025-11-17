@@ -317,3 +317,15 @@ let funct_default_param = -> (x: int = 5, y: int = 10): int {
 }
 
 printf("Default params no args: %d\n", funct_default_param())
+
+
+let pointer_test = -> (size: int*) {
+  printf("Size of int type: %p\n", size)
+}
+
+# let* size = 100
+
+# pointer_test(size)
+
+# printf("Pointer test malloc 100 bytes: %p\n", ptr)
+# printf("Size of int type: %d\n", &ptr)
