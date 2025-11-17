@@ -327,3 +327,11 @@ let pointer_test = -> (size: int*) {
 # Create a pointer to an int and test it
 let* size = 100
 pointer_test(size)
+
+let address_test = 50
+pointer_test(&address_test)
+
+let other_address = &address_test
+printf("Other address value should be 50: %d\n", *other_address)
+printf("Other address: %p\n", other_address)
+

@@ -13,6 +13,7 @@ class TokenType(enum.Enum):
     COMMA      = "COMMA"
     ASSIGN     = "ASSIGN"
     SEMICOLON  = "SEMICOLON"
+    AMPERSAND  = "AMPERSAND"
 
     # Comparisons
     EQUAL  = "EQUAL"
@@ -140,6 +141,8 @@ class Lexer:
             return self._consume_identifier()
         if current.isnumeric():
             return self._consume_number()
+        if current == "&":
+            return Token(TokenType.AMPERSAND, *self._consume(), self.file_name)
         if current == ";":
             return Token(TokenType.SEMICOLON, *self._consume(), self.file_name)
         if current == "%":

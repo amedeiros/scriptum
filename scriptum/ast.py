@@ -741,6 +741,18 @@ class WhileNode(ASTNode):
         # After loop block
         builder.position_at_start(after_block)
 
+class AddressOfNode(ASTNode):
+    def codegen(self, builder, module, symbol_table):
+        if len(self.children) != 1:
+            raise CodeGenError(f"AddressOf operator requires exactly one operand at {self.token.line_number()}")
+        operand_node = self.children[0]
+        if not isinstance(operand_node, IdentifierNode):
+            raise CodeGenError(f"AddressOf operator can only be applied to identifiers at {self.token.line_number()}")
+        identifier = operand_node.token.value
+        symbol_entry = symbol_table.get(identifier)
+        if symbol_entry is None:
+            raise CodeGenError(f"Undefined variable: {identifier} at {self.token.line_number()}")
+        return symbol_entry.variable_addr
 
 class PointerDereferenceNode(ASTNode):
     def codegen(self, builder, module, symbol_table):

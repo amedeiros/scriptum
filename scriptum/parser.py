@@ -68,6 +68,7 @@ class Parser:
         self._register_prefix(TokenType.IMPORT, self._parse_import_statement)
         self._register_prefix(TokenType.FROM, self._parse_from_statement)
         self._register_prefix(TokenType.STAR, self._parse_prefix_expression)
+        self._register_prefix(TokenType.AMPERSAND, self._parse_prefix_expression)
 
     def _load_infix_parse_funcs(self) -> None:
         self._register_infix(TokenType.AND, self._parse_infix_expression)
@@ -105,6 +106,8 @@ class Parser:
     def _parse_prefix_expression(self) -> PrefixNode:
         if self.current_token.type == TokenType.STAR and self.peek_token.type == TokenType.IDENTIFIER:
             expression = PointerDereferenceNode(self.current_token)
+        elif self.current_token.type == TokenType.AMPERSAND and self.peek_token.type == TokenType.IDENTIFIER:
+            expression = AddressOfNode(self.current_token)
         else:
             expression = PrefixNode(self.current_token)
         self._advance()
@@ -559,14 +562,7 @@ def print_ast(ast: list[ASTNode], level=0):
 
 def __main__():
     code = """
-    other_module.some_function(10, 20)
-
-    # import x
-    # import x, y
-    # import x, y, z as w
-    # from x import y
-    # from x import y, z as w
-    # from x import *
+    pointer_test(&address_test)
     """
     lexer = Lexer(code)
     parser = Parser(lexer)
