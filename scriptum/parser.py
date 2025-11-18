@@ -243,11 +243,6 @@ class Parser:
         # Parse let statement
         let = LetNode(self.current_token)
         self._consume(TokenType.LET)
-        is_pointer = False
-        if self._check(TokenType.STAR):
-            self._consume(TokenType.STAR)
-            is_pointer = True
-
         # Parse identifier
         identifier = self._parse_identifier()
         let.children.append(identifier)
@@ -257,8 +252,6 @@ class Parser:
         let.children.append(right_expr)
         identifier.static_type = right_expr.static_type
         if identifier.static_type is not None:
-            identifier.static_type.is_pointer = is_pointer
-            right_expr.static_type.is_pointer = is_pointer
             self.symbol_table[identifier.token.value] = identifier.static_type
         # Check for function definition and assign the identifier name to the function name
         if isinstance(let.children[len(let.children)-1], FunctionNode):

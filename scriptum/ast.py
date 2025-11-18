@@ -301,8 +301,6 @@ class BooleanNode(ASTNode):
         return ir.Constant(ir.IntType(1), 1 if self.value else 0)
 
 class IdentifierNode(ASTNode):
-    # array_elem_type: ir.Type | None
-
     def gentype(self) -> ir.Type:
         if self.static_type:
             if type := self.static_type.gentype():
@@ -330,8 +328,8 @@ class IdentifierNode(ASTNode):
         # Only load if it's a pointer to a non-array type
         if isinstance(var_addr.type, ir.types.PointerType) and not identifier.is_pointer:
             return builder.load(var_addr)
-        
-        # Otherwise return the loaded value
+
+        # Otherwise return the value
         return var_addr
 
 
