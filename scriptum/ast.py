@@ -272,6 +272,16 @@ class ArrayLiteralNode(ASTNode):
         
         return vector_struct_ptr
 
+class CharNode(ASTNode):
+    def gentype(self) -> ir.Type:
+        return ir.IntType(8)
+
+    def codegen(self, builder, module, symbol_table):
+        char_value = self.token.value.encode("utf8")
+        if len(char_value) != 1:
+            raise CodeGenError(f"Invalid character literal: {self.token.value} at {self.token.line_number()}")
+        return ir.Constant(ir.IntType(8), char_value[0])
+
 class StringNode(ASTNode):
     def gentype(self) -> ir.Type:
         return ir.PointerType(ir.IntType(8))
@@ -305,8 +315,6 @@ class IdentifierNode(ASTNode):
         if self.static_type:
             if type := self.static_type.gentype():
                 return type
-        else:
-            breakpoint()
 
         raise CodeGenError(f"Unknown static type for identifier {self.token.value} at {self.token.line_number()}")
 
