@@ -317,3 +317,20 @@ let funct_default_param = -> (x: int = 5, y: int = 10): int {
 }
 
 printf("Default params no args: %d\n", funct_default_param())
+
+# Pointers and address of tests
+let pointer_test = -> (size: int*) {
+  printf("Pointer value of size int type: %p\n", size)
+  printf("Size of int type: %d\n", *size)
+}
+
+let size = 100
+pointer_test(&size)
+
+let address_test = 50
+pointer_test(&address_test)
+
+let other_address = &address_test
+printf("Other address value should be 50: %d\n", *other_address)
+printf("Other address: %p\n", other_address)
+

@@ -13,6 +13,7 @@ class TokenType(enum.Enum):
     COMMA      = "COMMA"
     ASSIGN     = "ASSIGN"
     SEMICOLON  = "SEMICOLON"
+    AMPERSAND  = "AMPERSAND"
 
     # Comparisons
     EQUAL  = "EQUAL"
@@ -53,13 +54,14 @@ class TokenType(enum.Enum):
     FALSE  = "FALSE"
 
     # Static Types
-    TYPE_INT      = "TYPE_INT"
-    TYPE_FLOAT    = "TYPE_FLOAT"
-    TYPE_STRING   = "TYPE_STRING"
-    TYPE_BOOL     = "TYPE_BOOL"
-    TYPE_ARRAY    = "TYPE_ARRAY"
-    TYPE_VOID     = "TYPE_VOID"
     TYPE_CALLABLE = "TYPE_CALLABLE"
+    TYPE_STRING   = "TYPE_STRING"
+    TYPE_ARRAY    = "TYPE_ARRAY"
+    TYPE_FLOAT    = "TYPE_FLOAT"
+    TYPE_INT      = "TYPE_INT"
+    TYPE_BOOL     = "TYPE_BOOL"
+    TYPE_CHAR     = "TYPE_CHAR"
+    TYPE_VOID     = "TYPE_VOID"
 
     # Importing
     IMPORT = "IMPORT"
@@ -139,6 +141,8 @@ class Lexer:
             return self._consume_identifier()
         if current.isnumeric():
             return self._consume_number()
+        if current == "&":
+            return Token(TokenType.AMPERSAND, *self._consume(), self.file_name)
         if current == ";":
             return Token(TokenType.SEMICOLON, *self._consume(), self.file_name)
         if current == "%":

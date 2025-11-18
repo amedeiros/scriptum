@@ -39,6 +39,8 @@ PRECEDENCES[TokenType.DOT]      = DOT
 
 class Parser:
     def __init__(self, lexer: Lexer):
+        self.symbol_table = {}
+
         self.lexer = lexer
         self.current_token = lexer.next_token()
         self.peek_token = lexer.next_token()
@@ -65,6 +67,8 @@ class Parser:
         self._register_prefix(TokenType.LBRACK, self._parse_array_literal)
         self._register_prefix(TokenType.IMPORT, self._parse_import_statement)
         self._register_prefix(TokenType.FROM, self._parse_from_statement)
+        self._register_prefix(TokenType.STAR, self._parse_prefix_expression)
+        self._register_prefix(TokenType.AMPERSAND, self._parse_prefix_expression)
 
     def _load_infix_parse_funcs(self) -> None:
         self._register_infix(TokenType.AND, self._parse_infix_expression)
@@ -100,7 +104,12 @@ class Parser:
         return statements
 
     def _parse_prefix_expression(self) -> PrefixNode:
-        expression = PrefixNode(self.current_token)
+        if self.current_token.type == TokenType.STAR and self.peek_token.type == TokenType.IDENTIFIER:
+            expression = PointerDereferenceNode(self.current_token)
+        elif self.current_token.type == TokenType.AMPERSAND and self.peek_token.type == TokenType.IDENTIFIER:
+            expression = AddressOfNode(self.current_token)
+        else:
+            expression = PrefixNode(self.current_token)
         self._advance()
         expression.add_child(self._parse_expression(PREFIX))
         return expression
@@ -131,7 +140,7 @@ class Parser:
     def _parse_infix_expression(self, left: ASTNode) -> BinaryOpNode:
         # Array replication syntax
         if self.current_token.type == TokenType.STAR and left.token.type == TokenType.LBRACK:
-            expression = ArrayReplicationNode(left.token)
+            expression = ArrayReplicationNode(left.token, left.static_type)
         elif self.current_token.type == TokenType.DOT:
             expression = DotNode(self.current_token)
         else:
@@ -178,7 +187,7 @@ class Parser:
         # Parse return type defaults to void
         if self._check(TokenType.COLON):
             self._consume(TokenType.COLON)
-            function.static_return_type = self._parse_static_type()
+            function.static_type = self._parse_static_type()
 
         # Parse function body
         function.children.append(self._parse_block_statement())
@@ -235,10 +244,15 @@ class Parser:
         let = LetNode(self.current_token)
         self._consume(TokenType.LET)
         # Parse identifier
-        let.children.append(self._parse_identifier())
+        identifier = self._parse_identifier()
+        let.children.append(identifier)
         # Parse the expression assigned to the identifier
         self._consume(TokenType.ASSIGN)
-        let.children.append(self._parse_expression(LOWEST))
+        right_expr = self._parse_expression(LOWEST)
+        let.children.append(right_expr)
+        identifier.static_type = right_expr.static_type
+        if identifier.static_type is not None:
+            self.symbol_table[identifier.token.value] = identifier.static_type
         # Check for function definition and assign the identifier name to the function name
         if isinstance(let.children[len(let.children)-1], FunctionNode):
             let.children[len(let.children)-1].name = let.children[0].token.value
@@ -268,7 +282,7 @@ class Parser:
         # Parse return type defaults to void
         if self._check(TokenType.COLON):
             self._consume(TokenType.COLON)
-            foreign.static_return_type = self._parse_static_type()
+            foreign.static_type = self._parse_static_type()
 
         return foreign
 
@@ -295,7 +309,7 @@ class Parser:
             static_type = self._parse_static_type()
             arg_node = ArgumentIdentifierNode(ident, static_type)
             # Parse callable argument and return types
-            if static_type == TokenType.TYPE_CALLABLE or static_type == TokenType.TYPE_ARRAY:
+            if static_type.type == TokenType.TYPE_CALLABLE or static_type.type == TokenType.TYPE_ARRAY:
                 if self._check(TokenType.LBRACK):
                     self._consume(TokenType.LBRACK)
                     callable_arg_types = []
@@ -315,8 +329,9 @@ class Parser:
 
 
     def _parse_array_literal(self) -> ArrayLiteralNode:
-        array = ArrayLiteralNode(self.current_token)
+        lbrack_token = self.current_token
         self._consume(TokenType.LBRACK)
+        array = ArrayLiteralNode(lbrack_token)
         while not self._check(TokenType.RBRACK) and not self._is_eof():
             array.add_child(self._parse_expression(LOWEST))
             if not self._check(TokenType.RBRACK):
@@ -325,33 +340,38 @@ class Parser:
         # Infer static type if possible
         if len(array.children) > 0:
             if isinstance(array.children[0], ArrayLiteralNode):
-                array.static_type = ir.PointerType(vector_struct_ty)
-            elif not isinstance(array.children[0], IdentifierNode):
-                array.static_type = array.children[0].gentype()
+                array.static_type =  StaticType(lbrack_token, TokenType.TYPE_ARRAY)
+            elif array.children and array.children[0].static_type:
+                array.static_type = StaticType(lbrack_token, array.children[0].static_type.type)
+            elif array.children and array.children[0].token.type == TokenType.IDENTIFIER:
+                ident_name = array.children[0].token.value
+                identifier = self.symbol_table.get(ident_name)
+                if identifier:
+                    array.static_type = StaticType(lbrack_token, identifier.type)
 
         return array
 
     def _parse_int(self) -> NumberNode:
         int_token = self.current_token
         if self._match(TokenType.INT):
-            return NumberNode(int_token)
+            return NumberNode(int_token, StaticType(int_token, TokenType.TYPE_INT))
     
     def _parse_float(self) -> NumberNode:
         float_token = self.current_token
         if self._match(TokenType.FLOAT):
-            return NumberNode(float_token)
+            return NumberNode(float_token, StaticType(float_token, TokenType.TYPE_FLOAT))
     
     def _parse_string(self) -> ASTNode:
         string_token = self.current_token
         if self._match(TokenType.STRING):
-            return StringNode(string_token)
+            return StringNode(string_token, StaticType(string_token, TokenType.TYPE_STRING))
     
     def _parse_boolean(self) -> BooleanNode:
         boolean_token = self.current_token
         if self._match(TokenType.TRUE):
-            return BooleanNode(boolean_token, True)
+            return BooleanNode(boolean_token, True, StaticType(boolean_token, TokenType.TYPE_BOOL))
         if self._match(TokenType.FALSE):
-            return BooleanNode(boolean_token, False)
+            return BooleanNode(boolean_token, False, StaticType(boolean_token, TokenType.TYPE_BOOL))
         
         self._error(boolean_token, "expected TRUE or FALSE")
     
@@ -449,27 +469,35 @@ class Parser:
 
         return import_node
     
-    def _parse_static_type(self) -> TokenType:
+    def _parse_static_type(self) -> StaticType:
         if self._check(TokenType.IDENTIFIER):
             type_token = self.current_token
             self._consume(TokenType.IDENTIFIER)
+
+            is_pointer = False
+            if self._check(TokenType.STAR):
+                self._consume(TokenType.STAR)
+                is_pointer = True
+
             if type_token.value == "int":
-                return TokenType.TYPE_INT
+                return StaticType(type_token, TokenType.TYPE_INT, is_pointer)
             elif type_token.value == "float":
-                return TokenType.TYPE_FLOAT
+                return StaticType(type_token, TokenType.TYPE_FLOAT, is_pointer)
             elif type_token.value == "str":
-                return TokenType.TYPE_STRING
+                return StaticType(type_token, TokenType.TYPE_STRING, is_pointer)
             elif type_token.value == "bool":
-                return TokenType.TYPE_BOOL
+                return StaticType(type_token, TokenType.TYPE_BOOL, is_pointer)
             elif type_token.value == "array":
-                return TokenType.TYPE_ARRAY
+                return StaticType(type_token, TokenType.TYPE_ARRAY, is_pointer)
             elif type_token.value == "void":
-                return TokenType.TYPE_VOID
+                return StaticType(type_token, TokenType.TYPE_VOID, is_pointer)
             elif type_token.value == "callable":
-                return TokenType.TYPE_CALLABLE
+                return StaticType(type_token, TokenType.TYPE_CALLABLE, is_pointer)
+            elif type_token.value == "char":
+                return StaticType(type_token, TokenType.TYPE_CHAR, is_pointer)
             else:
-                self._error(type_token, f"expected type annotation (int, float, str, bool, array, void, callable) found {type_token.value} instead")
-        _self._error(self.current_token, f"expected type annotation (int, float, str, bool, array, void, callable) found {self.current_token.value} instead")
+                self._error(type_token, f"expected type annotation (int, float, str, bool, array, void, callable, char) found {type_token.value} instead")
+        self._error(self.current_token, f"expected type annotation (int, float, str, bool, array, void, callable, char) found {self.current_token.value} instead")
 
     def _match(self, types) -> bool:
         if not isinstance(types, list):
@@ -527,14 +555,7 @@ def print_ast(ast: list[ASTNode], level=0):
 
 def __main__():
     code = """
-    other_module.some_function(10, 20)
-
-    # import x
-    # import x, y
-    # import x, y, z as w
-    # from x import y
-    # from x import y, z as w
-    # from x import *
+    pointer_test(&address_test)
     """
     lexer = Lexer(code)
     parser = Parser(lexer)

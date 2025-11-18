@@ -7,7 +7,6 @@ from llvmlite import binding, ir
 from scriptum.lexer import Lexer, TokenType
 from scriptum.parser import Parser
 from scriptum.ast import SymbolTable, SymbolEntry
-import scriptum.builtins as builtins
 
 
 class Importer:
@@ -100,9 +99,6 @@ def compile_file(file_name, importer: Importer, symbol_table: SymbolTable, is_ma
         "is_main": is_main,
     }
     symbol_table["__context__"] = context
-
-    # Compile the builtins to every module so they are available
-    builtins.declare_builtins(module, symbol_table)
 
     # Define the wrapper function name for loose statements
     if is_main:
