@@ -55,6 +55,7 @@ class Parser:
         self._register_prefix(TokenType.INT, self._parse_int)
         self._register_prefix(TokenType.FLOAT, self._parse_float)
         self._register_prefix(TokenType.STRING, self._parse_string)
+        self._register_prefix(TokenType.CHAR, self._parse_char)
         self._register_prefix(TokenType.TRUE, self._parse_boolean)
         self._register_prefix(TokenType.FALSE, self._parse_boolean)
         self._register_prefix(TokenType.PLUS, self._parse_prefix_expression)
@@ -361,6 +362,11 @@ class Parser:
         if self._match(TokenType.FLOAT):
             return NumberNode(float_token, StaticType(float_token, TokenType.TYPE_FLOAT))
     
+    def _parse_char(self) -> CharNode:
+        char_token = self.current_token
+        if self._match(TokenType.CHAR):
+            return CharNode(char_token, StaticType(char_token, TokenType.TYPE_CHAR))
+
     def _parse_string(self) -> ASTNode:
         string_token = self.current_token
         if self._match(TokenType.STRING):

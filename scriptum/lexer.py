@@ -48,6 +48,7 @@ class TokenType(enum.Enum):
 
     # Native Types
     STRING = "STRING"
+    CHAR   = "CHAR"
     INT    = "INT"
     FLOAT  = "FLOAT"
     TRUE   = "TRUE"
@@ -135,6 +136,9 @@ class Lexer:
             if self.ignore_comments:
                 return self.next_token()
             return comment
+        
+        if current == "'":
+            return self._consume_char()
         if current == '"':
             return self._consume_string()
         if current.isalpha():
@@ -293,3 +297,18 @@ class Lexer:
         string = self.source_code[start+1:self.ip-1] # skip over "
         string = bytes(string, "utf-8").decode("unicode_escape")
         return Token(TokenType.STRING, string, row, column, self.file_name)
+    
+    def _consume_char(self) -> Token:
+        start = self.ip
+        # Consume the '
+        _, row, column = self._consume()
+        char, _, _ = self._consume()
+        if char == '\\':  # Handle escape character
+            char, _, _ = self._consume()  # Get the escaped character
+
+        if self._current_char() != "'":
+            raise LexerError(f"Expected \"'\" found {self._current_char()} instead")
+        
+        # Consume the closing '
+        self._consume()
+        return Token(TokenType.CHAR, char, row, column, self.file_name)
