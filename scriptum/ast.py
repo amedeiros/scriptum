@@ -27,6 +27,19 @@ def array_static_type_from_identifier(array_node, symbol_table):
     
     return array_node.gentype()
 
+def get_or_create_global_string(module, name, value):
+    # Check if the global already exists
+    if name in module.globals:
+        return module.get_global(name)
+    # Create a new global string
+    str_bytes = bytearray(value.encode("utf8")) + b"\00"
+    str_type = ir.ArrayType(ir.IntType(8), len(str_bytes))
+    global_str = ir.GlobalVariable(module, str_type, name=name)
+    global_str.linkage = 'internal'
+    global_str.global_constant = True
+    global_str.initializer = ir.Constant(str_type, str_bytes)
+    return global_str
+
 class StaticType:
     def __init__(self, token: Token, type: TokenType, is_pointer=False):
         self.token = token
@@ -280,7 +293,7 @@ class CharNode(ASTNode):
         char_value = self.token.value.encode("utf8")
         if len(char_value) != 1:
             raise CodeGenError(f"Invalid character literal: {self.token.value} at {self.token.line_number()}")
-        return ir.Constant(ir.IntType(8), char_value[0])
+        return ir.Constant(self.gentype(), char_value[0])
 
 class StringNode(ASTNode):
     def gentype(self) -> ir.Type:
@@ -330,7 +343,7 @@ class IdentifierNode(ASTNode):
             return var_addr
 
         # If the variable is a string/array return its pointer
-        if ASTNode.is_string_value(var_addr) or \
+        if not isinstance(identifier.node, CharNode) and ASTNode.is_string_value(var_addr) or \
             (isinstance(var_addr.type, ir.types.PointerType) and var_addr.type.pointee == vector_struct_ty):
             return var_addr
         # Only load if it's a pointer to a non-array type
@@ -747,6 +760,100 @@ class WhileNode(ASTNode):
         # After loop block
         builder.position_at_start(after_block)
 
+class TypeCastNode(ASTNode):
+    def target_type_from_string(self, type_str: str) -> ir.Type:
+        if type_str == "int":
+            return ir.IntType(64)
+        elif type_str == "float":
+            return ir.FloatType()
+        elif type_str == "bool":
+            return ir.IntType(1)
+        elif type_str == "str":
+            return ir.PointerType(ir.IntType(8))
+        elif type_str == "char":
+            return ir.IntType(8)
+        else:
+            raise CodeGenError(f"Unsupported target type for cast: {type_str} at {self.token.line_number()}")
+
+    def codegen(self, builder, module, symbol_table):
+        value_node = self.children[0]
+        value = value_node.codegen(builder, module, symbol_table)
+        target_type = self.target_type_from_string(self.token.value)
+
+        if target_type == ir.FloatType():
+            if value.type == ir.IntType(64):
+                return builder.sitofp(value, ir.FloatType())
+            elif value.type == ir.IntType(8) or value.type == ir.IntType(1):
+                return builder.uitofp(value, ir.FloatType())
+            else:
+                raise CodeGenError(f"Cannot cast type {value.type} to float at {self.token.line_number()}")
+        elif target_type == ir.IntType(64):
+            if value.type == ir.FloatType():
+                return builder.fptosi(value, ir.IntType(64))
+            elif value.type == ir.IntType(8) or value.type == ir.IntType(1):
+                return builder.zext(value, ir.IntType(64))
+            else:
+                raise CodeGenError(f"Cannot cast type {value.type} to int at {self.token.line_number()}")
+        elif target_type == ir.IntType(1):
+            if value.type == ir.FloatType():
+                return builder.fptoui(value, ir.IntType(1))
+            elif value.type == ir.IntType(8) or value.type == ir.IntType(64):
+                return builder.trunc(value, ir.IntType(1))
+            else:
+                raise CodeGenError(f"Cannot cast type {value.type} to bool at {self.token.line_number()}")
+        elif target_type == ir.IntType(8): # convert to char
+            if value.type == ir.IntType(64):
+                return builder.trunc(value, ir.IntType(8))
+            elif value.type == ir.IntType(1):
+                return builder.zext(value, ir.IntType(8))
+            elif value.type == ir.PointerType(ir.IntType(8)):
+                # If it's a string, we can take the first character
+                return builder.load(builder.gep(value, [ir.Constant(ir.IntType(32), 0)]))
+            else:
+                raise CodeGenError(f"Cannot cast type {value.type} to char at {self.token.line_number()}")
+        elif target_type == ir.PointerType(ir.IntType(8)): # convert to string
+            sprintf = symbol_table.get("sprintf").variable_addr
+
+            if value.type == ir.PointerType(ir.IntType(8)):
+                return value
+            elif value.type == ir.IntType(8): # Char to string
+                out = builder.alloca(ir.ArrayType(ir.IntType(8), 2))
+                out_ptr = builder.gep(out, [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), 0)])
+                builder.store(value, out_ptr)
+                null_terminator_ptr = builder.gep(out_ptr, [ir.Constant(ir.IntType(32), 1)])
+                builder.store(ir.Constant(ir.IntType(8), 0), null_terminator_ptr)
+                return out
+            elif value.type == ir.IntType(64): # Int to string
+                out = builder.alloca(ir.ArrayType(ir.IntType(8), 20))
+                out_ptr = builder.gep(out, [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), 0)])
+                value = builder.zext(value, ir.IntType(64))  # Ensure it's a 64-bit integer
+                # Call sprintf to format the integer as a string
+                fmt_global = get_or_create_global_string(module, "fmt_int64", "%lld")
+                fmt_ptr = builder.gep(fmt_global, [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), 0)])
+                builder.call(sprintf, [out_ptr, fmt_ptr, value])
+                return out
+            elif value.type == ir.FloatType(): # Float to string
+                out = builder.alloca(ir.ArrayType(ir.IntType(8), 32))
+                out_ptr = builder.gep(out, [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), 0)])
+                fmt_global = get_or_create_global_string(module, "fmt_float", "%f")
+                fmt_ptr = builder.gep(fmt_global, [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), 0)])
+                builder.call(sprintf, [out_ptr, fmt_ptr, value])
+                return out
+            elif value.type == ir.IntType(1): # Bool to string
+                out = builder.alloca(ir.ArrayType(ir.IntType(8), 6))
+                out_ptr = builder.gep(out, [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), 0)])
+                true_str_global = get_or_create_global_string(module, "true_str", "true")
+                false_str_global = get_or_create_global_string(module, "false_str", "false")
+                true_str_ptr = builder.gep(true_str_global, [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), 0)])
+                false_str_ptr = builder.gep(false_str_global, [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), 0)])
+                result_ptr = builder.select(value, true_str_ptr, false_str_ptr)
+                builder.call(sprintf, [out_ptr, result_ptr])
+                return out
+            else:
+                raise CodeGenError(f"Cannot cast type {value.type} to string at {self.token.line_number()}")
+        else:
+            raise CodeGenError(f"Unsupported target type for cast: {target_type} at {self.token.line_number()}")
+
 class AddressOfNode(ASTNode):
     def codegen(self, builder, module, symbol_table):
         if len(self.children) != 1:
@@ -861,7 +968,7 @@ class LetNode(ASTNode):
         else: # INT, FLOAT, BOOL, infix operations, etc
             var_addr = builder.alloca(value.type)
             builder.store(value, var_addr)
-        
+
         # During parsing we set the name on the FunctionNode for codegen.
         # This is because we need a unique name at the codegen site of a function (FunctionNode).
         if value_node.token.type != TokenType.FUNCTION:

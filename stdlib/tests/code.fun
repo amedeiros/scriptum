@@ -334,3 +334,25 @@ let other_address = &address_test
 printf("Other address value should be 50: %d\n", *other_address)
 printf("Other address: %p\n", other_address)
 
+# Chars
+let char = 'A'
+printf("Char value: %c\n", char)
+
+# Type conversion tests
+let int_to_float = 10
+printf("Int to float conversion should be 10.00: %.2f\n", float(int_to_float))
+let float_to_int = 10.99
+printf("Float to int conversion should be 10: %d\n", int(float_to_int))
+printf("Char to int conversion should be 65: %d\n", int(char))
+printf("Int to char conversion should be 'A': %c\n", char(65))
+printf("String to char conversion should be 'H': %c\n", char("H"))
+printf("Char variable to string conversion should be 'A': %s\n", str(char))
+printf("Char literal to string conversion should be 'A': %s\n", str('A'))
+printf("Int literal to string conversion should be '100': %s\n", str(100))
+printf("Int variable to string conversion should be '10': %s\n", str(int_to_float))
+printf("Int from function to string conversion should be 42: %s\n", str(add(20, 22)))
+printf("Float variable to string conversion should be '10.99': %s\n", str(float_to_int))
+printf("Float literal to string conversion should be '3.14': %s\n", str(3.14))
+printf("Bool variable to string conversion should be 'true': %s\n", str(true))
+printf("Bool variable to string conversion should be 'false': %s\n", str(false))
+

@@ -382,17 +382,20 @@ class Parser:
         self._error(boolean_token, "expected TRUE or FALSE")
     
     def _parse_call_expression(self, function_identifier):
+        ident_value = function_identifier.token.value
         # Compile time append function
-        if function_identifier.token.value == "append":
+        if ident_value == "append":
             expression = AppendNode(function_identifier.token)
-        elif function_identifier.token.value == "remove":
+        elif ident_value == "remove":
             expression = ArrayRemoveNode(function_identifier.token)
-        elif function_identifier.token.value == "pop":
+        elif ident_value == "pop":
             expression = ArrayPopNode(function_identifier.token)
-        elif function_identifier.token.value == "insert":
+        elif ident_value == "insert":
             expression = ArrayInsertNode(function_identifier.token)
-        elif function_identifier.token.value == "index_of":
+        elif ident_value == "index_of":
             expression = ArrayIndexOfNode(function_identifier.token)
+        elif ident_value in ["int", "float", "str", "bool", "char"]:
+            expression = TypeCastNode(function_identifier.token)
         else:
             expression = FunctionCallNode(function_identifier.token)
 
