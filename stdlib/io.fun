@@ -4,3 +4,5 @@
 foreign printf = -> (value: str, var_arg: bool = true): int
 
 foreign puts = -> (value: str): int
+
+foreign sprintf = -> (out: str, format: str, var_arg: bool = true): int
